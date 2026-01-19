@@ -1,0 +1,30 @@
+.navbar {
+  background: white;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar-logo {
+  width: 32px;
+  height: auto;
+}
+a{
+    text-decoration: none;
+    color: blue;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.navbar-title {
+  font-weight: 600;
+  font-size: 15px;
+}
