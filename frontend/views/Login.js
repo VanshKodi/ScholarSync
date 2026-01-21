@@ -25,7 +25,7 @@ export function Login() {
               <span class="login-input-icon">
                 <img src="./resources/icons/mail.svg" alt="" />
               </span>
-              <input id="email" type="email" required />
+              <input id="email" type="email" required placeholder="user@edu.com" />
             </div>
           </div>
 
@@ -35,7 +35,7 @@ export function Login() {
               <span class="login-input-icon">
                 <img src="./resources/icons/lock.svg" alt="" />
               </span>
-              <input id="password" type="password" required />
+              <input id="password" type="password" required placeholder="••••••••" />
             </div>
           </div>
 

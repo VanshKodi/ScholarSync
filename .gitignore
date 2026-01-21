@@ -1,0 +1,65 @@
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+*.key
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+
+# =========================
+# Node / Frontend
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs (if added later)
+frontend/dist/
+frontend/build/
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# Coverage / Test artifacts
+# =========================
+.coverage
+htmlcov/
+
+# =========================
+# Supabase local
+# =========================
+.supabase/
