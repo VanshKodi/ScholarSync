@@ -1,0 +1,30 @@
+.dashboard-page {
+  min-height: 100vh;
+  background: #f4f7fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-card {
+  background: white;
+  padding: 32px;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+  width: 100%;
+  max-width: 420px;
+}
+
+.dashboard-card h2 {
+  margin-bottom: 16px;
+}
+
+.dashboard-card p {
+  margin-bottom: 8px;
+}
+
+.dashboard-note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #64748b;
+}
