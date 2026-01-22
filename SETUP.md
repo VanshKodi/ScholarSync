@@ -1,44 +1,123 @@
-STEP-1 Clone Repo
+# SETUP.md — ScholarSync Local Setup Guide
 
-git clone https://github.com/VanshKodi/ScholarSync
+This document describes how to set up **ScholarSync** locally using Supabase, FastAPI, and a vanilla HTML/CSS/JavaScript frontend.
 
-Step-2 Supabase Project Creation
+> ⚠️ Supabase UI, settings, and key locations may change over time. Some steps may vary depending on the current Supabase version.
 
-steps might vary based on date and current supabase version
+---
 
-Create a new Supabase Project 
-in Authentication -> CONFIGURATION -> Sign In/Providers
--disable Confirm Email
-![alt text](image.png)
+## STEP 1: Clone the Repository
 
-Step-3 DB - Setup
+Clone the project repository to your local machine:
 
-Copy contents of backend/db_schema.md
-and run that inside the SQL-Editor inside Supabase
-![alt text](image-1.png)
+    git clone https://github.com/VanshKodi/ScholarSync
 
-Step-4 KEY Extraction
-- Might vary / entierly break
-Create a .env inside backend and populate it with following variables
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+---
 
-SUPABASE_URL is project url found inside ProjectSettings -> Data API
-SUPABASE_SERVICE_ROLE_KEY is found in ProjectSettings -> API keys -> Legacy anon/service_role
-![alt text](image-2.png)
+## STEP 2: Supabase Project Creation
 
-Step-4 Install Live server (VS Code extension)
-Step-5 run live server on frontend/index.html
-Step-6 Backend Setup
-pip install -r backend/requirements.txt
+1. Create a **new Supabase project**
+2. Navigate to:
+   Authentication → Configuration → Sign In / Providers
+3. Disable **Confirm Email** to simplify local authentication
 
-uvicorn backend/main:app --reload --port 8000
+![Disable Confirm Email](image.png)
 
-Step-7 Auth Setup
-in Supabase head to Authentication -> CONFIGURATION ->URL CONFIGURATION
-ADD Following url
+---
+
+## STEP 3: Database Setup
+
+1. Open the file: `backend/db_schema.md`
+2. Copy its entire contents
+3. Go to **Supabase → SQL Editor**
+4. Paste the schema and execute it
+
+This initializes all required database tables.
+
+![SQL Editor](image-1.png)
+
+---
+
+## STEP 4: Environment Variables & API Keys
+
+> ⚠️ Key locations may change in future Supabase updates.
+
+1. Inside the `backend` directory, create a `.env` file
+2. Add the following variables:
+
+    SUPABASE_URL=
+    
+    SUPABASE_SERVICE_ROLE_KEY=
+
+### Key Sources
+
+- SUPABASE_URL  
+  Project Settings → Data API
+
+- SUPABASE_SERVICE_ROLE_KEY  
+  Project Settings → API Keys → Legacy anon / service_role
+
+![API Keys](image-2.png)
+
+⚠️ **Never expose the service role key on the frontend.**
+
+---
+
+## STEP 5: Install Live Server (VS Code)
+
+- Install the **Live Server** extension from the VS Code Marketplace
+
+---
+
+## STEP 6: Run the Frontend
+
+1. Open `frontend/index.html` in VS Code
+2. Start **Live Server**
+
+Frontend will be available at:
 http://127.0.0.1:5500
-http://127.0.0.1:8000
-EVERYTHING SHOULD BE RUNNING AS OF NOW
 
-STEP-8 SETUP BUCKETS (To store documents)
+---
+
+## STEP 7: Backend Setup
+
+Install Python dependencies:
+
+    pip install -r backend/requirements.txt
+
+Start the backend server:
+
+    uvicorn backend.main:app --reload --port 8000
+
+Backend will run at:
+http://127.0.0.1:8000
+
+---
+
+## STEP 8: Authentication URL Configuration
+
+In Supabase, navigate to:
+Authentication → Configuration → URL Configuration
+
+Add the following URLs:
+
+    http://127.0.0.1:5500
+    http://127.0.0.1:8000
+
+---
+
+## STEP 9: Storage Buckets Setup
+
+- Create the required **Storage Buckets** in Supabase
+- These buckets are used to store uploaded documents
+
+---
+
+## Final Status
+
+At this point:
+- Frontend is running
+- Backend is running
+- Database is initialized
+- Authentication is configured
+- Storage is ready
