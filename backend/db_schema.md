@@ -81,6 +81,7 @@ ALTER TABLE document_chunks DISABLE ROW LEVEL SECURITY;
 
 CREATE INDEX idx_chunks_doc ON document_chunks(doc_id);
 
+CREATE EXTENSION IF NOT EXISTS vector;
 
 /* =========================================================
    5. EMBEDDINGS
