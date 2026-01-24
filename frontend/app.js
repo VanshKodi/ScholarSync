@@ -1,14 +1,11 @@
 import { Navbar } from "./components/Navbar.js";
 import { router } from "./router.js";
 import { clearSession } from "./scripts/session.js";
-
+import { supabase } from "./scripts/supabase.js";
+import { setSession } from "./scripts/session.js";
 const app = document.getElementById("app");
 const navbar = document.getElementById("navbar");
 
-/**
- * Hides the global splash screen once the app is ready.
- * We use a class so we can handle the fade-out transition in CSS.
- */
 function hideLoader() {
   const loader = document.getElementById("global-loader");
   if (loader) {
@@ -21,27 +18,36 @@ function hideLoader() {
   }
 }
 
+// frontend/app.js
+import { logout } from "./scripts/auth.js"; // Make sure to import the logic
+
 function attachNavbarHandlers() {
   const logoutBtn = document.getElementById("logoutBtn");
   if (!logoutBtn) return;
 
-  logoutBtn.addEventListener("click", (e) => {
+  logoutBtn.addEventListener("click", async (e) => { // Added async
     e.preventDefault();
-    clearSession();
-    window.location.hash = "#/login";
-    render();
+    
+    try {
+      await logout(); // Wait for the cleanup to finish
+      window.location.hash = "#/login"; 
+      // render() will be called automatically by the hashchange listener
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
   });
 }
 
-function render() {
-  // 1. Build the UI
+async function render() {
+  // Check if Supabase still considers us logged in (Local Storage check)
+  const { data } = await supabase.auth.getSession();
+  if (data.session) {
+    setSession(data.session);
+  }
+
   navbar.innerHTML = Navbar();
   attachNavbarHandlers();
   router(app);
-
-  // 2. Reveal the app!
-  // This runs on every render, but hideLoader is smart enough 
-  // to only have a visible effect the very first time.
   hideLoader();
 }
 
