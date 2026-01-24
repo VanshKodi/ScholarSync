@@ -87,7 +87,8 @@ Install Python dependencies:
 
 Start the backend server:
 
-    uvicorn backend.main:app --reload --port 8000
+cd .\backend\
+uvicorn main:app --reload --port 8000
 
 Backend will run at:
 http://127.0.0.1:8000

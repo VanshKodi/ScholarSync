@@ -1,0 +1,1320 @@
+
+======================================================================
+FILE: SETUP.md
+======================================================================
+# SETUP.md — ScholarSync Local Setup Guide
+
+This document describes how to set up **ScholarSync** locally using Supabase, FastAPI, and a vanilla HTML/CSS/JavaScript frontend.
+
+> ⚠️ Supabase UI, settings, and key locations may change over time. Some steps may vary depending on the current Supabase version.
+
+---
+
+## STEP 1: Clone the Repository
+
+Clone the project repository to your local machine:
+
+    git clone https://github.com/VanshKodi/ScholarSync
+
+---
+
+## STEP 2: Supabase Project Creation
+
+1. Create a **new Supabase project**
+2. Navigate to:
+   Authentication → Configuration → Sign In / Providers
+3. Disable **Confirm Email** to simplify local authentication
+
+![Disable Confirm Email](image.png)
+
+---
+
+## STEP 3: Database Setup
+
+1. Open the file: `backend/db_schema.md`
+2. Copy its entire contents
+3. Go to **Supabase → SQL Editor**
+4. Paste the schema and execute it
+
+This initializes all required database tables.
+
+![SQL Editor](image-1.png)
+
+---
+
+## STEP 4: Environment Variables & API Keys
+
+> ⚠️ Key locations may change in future Supabase updates.
+
+1. Inside the `backend` directory, create a `.env` file
+2. Add the following variables:
+
+    SUPABASE_URL=
+    
+    SUPABASE_SERVICE_ROLE_KEY=
+
+### Key Sources
+
+- SUPABASE_URL  
+  Project Settings → Data API
+
+- SUPABASE_SERVICE_ROLE_KEY  
+  Project Settings → API Keys → Legacy anon / service_role
+
+![API Keys](image-2.png)
+
+⚠️ **Never expose the service role key on the frontend.**
+
+---
+
+## STEP 5: Install Live Server (VS Code)
+
+- Install the **Live Server** extension from the VS Code Marketplace
+
+---
+
+## STEP 6: Run the Frontend
+
+1. Open `frontend/index.html` in VS Code
+2. Start **Live Server**
+
+Frontend will be available at:
+http://127.0.0.1:5500
+
+---
+
+## STEP 7: Backend Setup
+
+Install Python dependencies:
+
+    pip install -r backend/requirements.txt
+
+Start the backend server:
+
+cd .\backend\
+uvicorn main:app --reload --port 8000
+
+Backend will run at:
+http://127.0.0.1:8000
+
+---
+
+## STEP 8: Authentication URL Configuration
+
+In Supabase, navigate to:
+Authentication → Configuration → URL Configuration
+
+Add the following URLs:
+
+    http://127.0.0.1:5500
+    http://127.0.0.1:8000
+
+---
+
+## STEP 9: Storage Buckets Setup
+
+- Create the required **Storage Buckets** in Supabase
+- These buckets are used to store uploaded documents
+
+---
+
+## Final Status
+
+At this point:
+- Frontend is running
+- Backend is running
+- Database is initialized
+- Authentication is configured
+- Storage is ready
+
+======================================================================
+FILE: backend\db_schema.md
+======================================================================
+/* =========================================================
+   0. SAFETY: ensure we're working in public schema
+   ========================================================= */
+SET search_path = public;
+
+
+/* =========================================================
+   1. PROFILES
+   ========================================================= */
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('admin', 'faculty')),
+    university_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
+
+
+/* =========================================================
+   2. DOCUMENTS (physical versions)
+   ========================================================= */
+CREATE TABLE documents (
+    doc_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_group_id UUID NOT NULL,
+    university_id UUID NOT NULL,
+
+    storage_bucket TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+
+    mime_type TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+
+    status TEXT NOT NULL CHECK (status IN ('active', 'superseded', 'archived')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE documents DISABLE ROW LEVEL SECURITY;
+
+CREATE INDEX idx_documents_group ON documents(document_group_id);
+CREATE INDEX idx_documents_university ON documents(university_id);
+CREATE INDEX idx_documents_status ON documents(status);
+
+
+/* =========================================================
+   3. DOCUMENT SCOPE (visibility rules)
+   ========================================================= */
+CREATE TABLE document_scope (
+    document_group_id UUID PRIMARY KEY,
+
+    scope_type TEXT NOT NULL CHECK (scope_type IN ('university', 'user')),
+    owner_university_id UUID NOT NULL,
+    owner_user_id UUID NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CHECK (
+        (scope_type = 'university' AND owner_user_id IS NULL)
+        OR
+        (scope_type = 'user' AND owner_user_id IS NOT NULL)
+    )
+);
+
+ALTER TABLE document_scope DISABLE ROW LEVEL SECURITY;
+
+
+/* =========================================================
+   4. DOCUMENT CHUNKS
+   ========================================================= */
+CREATE TABLE document_chunks (
+    chunk_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    doc_id UUID NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+
+    chunk_index INTEGER NOT NULL,
+    text_content TEXT NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE document_chunks DISABLE ROW LEVEL SECURITY;
+
+CREATE INDEX idx_chunks_doc ON document_chunks(doc_id);
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+/* =========================================================
+   5. EMBEDDINGS
+   ========================================================= */
+CREATE TABLE embeddings (
+    embedding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    chunk_id UUID NOT NULL REFERENCES document_chunks(chunk_id) ON DELETE CASCADE,
+
+    model_name TEXT NOT NULL,
+    vector VECTOR(768), -- adjust if you change embedding model
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE embeddings DISABLE ROW LEVEL SECURITY;
+
+CREATE INDEX idx_embeddings_chunk ON embeddings(chunk_id);
+
+
+/* =========================================================
+   6. LOCK DOWN FRONTEND ACCESS
+   ========================================================= */
+REVOKE ALL ON TABLE
+    profiles,
+    documents,
+    document_scope,
+    document_chunks,
+    embeddings
+FROM anon, authenticated;
+
+
+/* =========================================================
+   7. DONE
+   ========================================================= */
+
+======================================================================
+FILE: backend\main.py
+======================================================================
+import os
+import requests
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load env vars
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_URL or not SERVICE_ROLE_KEY:
+    raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+
+app = FastAPI()
+
+# -----------------------
+# CORS (allow frontend)
+# -----------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # tighten later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -----------------------
+# Helpers
+# -----------------------
+def get_user_from_token(token: str):
+    res = requests.get(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": SERVICE_ROLE_KEY
+        }
+    )
+
+    if res.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return res.json()
+
+
+# -----------------------
+# Schemas
+# -----------------------
+class InitProfileRequest(BaseModel):
+    requested_role: str
+
+
+# -----------------------
+# Routes
+# -----------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.post("/auth/init-profile")
+def init_profile(
+    payload: InitProfileRequest,
+    authorization: str = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    token = authorization.replace("Bearer ", "")
+    user = get_user_from_token(token)
+
+    return {
+        "message": "Auth OK",
+        "user_id": user["id"],
+        "email": user["email"],
+        "requested_role": payload.requested_role,
+        "assigned_role": "faculty"
+    }
+
+
+@app.get("/auth/me")
+def me(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    user = get_user_from_token(token)
+
+    return {
+        "id": user["id"],
+        "email": user["email"]
+    }
+
+======================================================================
+FILE: frontend\app.js
+======================================================================
+import { Navbar } from "./components/Navbar.js";
+import { router } from "./router.js";
+import { clearSession } from "./scripts/session.js";
+
+const app = document.getElementById("app");
+const navbar = document.getElementById("navbar");
+
+function attachNavbarHandlers() {
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (!logoutBtn) return;
+
+  logoutBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    clearSession();
+    window.location.hash = "#/login";
+    render();
+  });
+}
+
+function render() {
+  navbar.innerHTML = Navbar();
+  attachNavbarHandlers();
+  router(app);
+}
+
+window.addEventListener("hashchange", render);
+window.addEventListener("load", render);
+
+======================================================================
+FILE: frontend\index.html
+======================================================================
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>ScholarSync</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="./resources/favicons/favicon.ico">
+  <link rel="icon" type="image/png" sizes="16x16" href="./resources/favicons/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="./resources/favicons/favicon-32x32.png">
+
+  <link rel="apple-touch-icon" href="./resources/favicons/apple-touch-icon.png">
+
+  <link rel="manifest" href="./resources/favicons/site.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+
+  <!-- Global -->
+<link rel="stylesheet" href="./styles/base.css">
+
+<!-- Components -->
+<link rel="stylesheet" href="./components/Navbar.css">
+<link rel="stylesheet" href="./components/FeatureCard.css">
+
+<!-- Views -->
+<link rel="stylesheet" href="./views/Landing.css">
+<link rel="stylesheet" href="./views/Login.css">
+<link rel="stylesheet" href="./views/Signup.css">
+
+</head>
+
+<body>
+
+  <!-- NAVBAR -->
+  <header id="navbar"></header>
+
+  <!-- MAIN CONTENT (SPA TARGET) -->
+  <main id="app"></main>
+
+  <script type="module" src="app.js"></script>
+
+</body>
+
+</html>
+======================================================================
+FILE: frontend\router.js
+======================================================================
+import { Landing } from "./views/Landing.js";
+import { Login } from "./views/Login.js";
+import { Signup } from "./views/Signup.js";
+import { Dashboard } from "./views/Dashboard.js";
+
+import { getSession } from "./scripts/session.js";
+import { attachLoginHandler, attachSignupHandler } from "./scripts/authHandlers.js";
+
+const routes = {
+  "": Landing,
+  "#/": Landing,
+  "#/login": Login,
+  "#/signup": Signup,
+  "#/dashboard": Dashboard
+};
+
+export function router(app) {
+  const path = window.location.hash || "#/";
+  const view = routes[path] || (() => "<h2>404</h2>");
+
+  // 🔒 Auth guard
+  if (path === "#/dashboard" && !getSession()) {
+    window.location.hash = "#/login";
+    return;
+  }
+
+  // Render view
+  app.innerHTML = view();
+
+  // 🔑 Attach handlers AFTER render
+  if (path === "#/login") {
+    attachLoginHandler();
+  }
+
+  if (path === "#/signup") {
+    attachSignupHandler();
+  }
+}
+
+======================================================================
+FILE: frontend\styles.css
+======================================================================
+body {
+  margin: 0;
+  font-family: Inter, Arial, sans-serif;
+  background: #f5f7ff;
+  color: #0f172a;
+}
+/* BUTTONS */
+.btn-primary {
+  background: #5b6cff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-large {
+  padding: 12px 24px;
+}
+
+/* HERO */
+
+/* FEATURES */
+
+/* FOOTER */
+.footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+======================================================================
+FILE: frontend\components\FeatureCard.css
+======================================================================
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+.feature-card {
+  background: white;
+  padding: 24px;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.feature-icon {
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.feature-card h3 {
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+
+.feature-card p {
+  font-size: 13px;
+  color: #475569;
+}
+
+======================================================================
+FILE: frontend\components\FeatureCard.js
+======================================================================
+export function FeatureCard(icon, title, description) {
+  return `
+    <div class="feature-card">
+      <div class="feature-icon">${icon}</div>
+      <h3>${title}</h3>
+      <p>${description}</p>
+    </div>
+  `;
+}
+
+======================================================================
+FILE: frontend\components\Navbar.css
+======================================================================
+.navbar {
+  background: white;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.navbar-logo {
+  width: 32px;
+  height: auto;
+}
+a{
+    text-decoration: none;
+    color: blue;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.navbar-title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+======================================================================
+FILE: frontend\components\Navbar.js
+======================================================================
+import { getSession, getProfile } from "../scripts/session.js";
+
+export function Navbar() {
+  const session = getSession();
+  const profile = getProfile();
+
+  // Logged OUT
+  if (!session) {
+    return `
+      <header class="navbar">
+        <div class="navbar-left">
+          <a href="#/">
+            <img
+              src="./resources/favicons/graduation-cap.svg"
+              class="navbar-logo"
+              alt="ScholarSync"
+            />
+            <span class="navbar-title">ScholarSync</span>
+          </a>
+        </div>
+
+        <a href="#/login" class="btn-primary">Get Started</a>
+      </header>
+    `;
+  }
+
+  // Logged IN
+  return `
+    <header class="navbar">
+      <div class="navbar-left">
+        <a href="#/">
+          <img
+            src="./resources/favicons/graduation-cap.svg"
+            class="navbar-logo"
+            alt="ScholarSync"
+          />
+          <span class="navbar-title">ScholarSync</span>
+        </a>
+      </div>
+
+      <div class="navbar-right">
+        <span class="navbar-role">
+          ${profile?.role?.toUpperCase() || ""}
+        </span>
+
+        <a href="#/dashboard" class="btn-secondary">
+          Dashboard
+        </a>
+
+        <a href="#" id="logoutBtn" class="btn-primary">
+          Logout
+        </a>
+      </div>
+    </header>
+  `;
+}
+
+======================================================================
+FILE: frontend\scripts\auth.js
+======================================================================
+import { supabase } from "./supabase.js";
+import { setSession, clearSession } from "./session.js";
+
+export async function login(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+  if (error) throw error;
+  setSession(data.session);
+}
+
+export async function signup(email, password) {
+  const { error } = await supabase.auth.signUp({
+    email,
+    password
+  });
+  if (error) throw error;
+}
+
+export async function logout() {
+  await supabase.auth.signOut();
+  clearSession();
+}
+
+======================================================================
+FILE: frontend\scripts\authHandlers.js
+======================================================================
+// frontend/scripts/authHandlers.js
+import { login, signup } from "./auth.js";
+import { getSession } from "./session.js";
+
+
+// ✅ LOGIN HANDLER
+export function attachLoginHandler() {
+  const form = document.getElementById("loginForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    try {
+      await login(email, password);
+
+      const session = getSession();
+      if (!session) {
+        throw new Error("Login succeeded but session missing");
+      }
+
+      window.location.hash = "#/dashboard";
+    } catch (err) {
+      alert(err.message || "Login failed");
+    }
+  });
+}
+
+
+// ✅ SIGNUP HANDLER
+export function attachSignupHandler() {
+  const form = document.getElementById("signupForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const email = document.getElementById("signup-email").value;
+    const password = document.getElementById("signup-password").value;
+    const confirm = document.getElementById("signup-confirm").value;
+
+    const roleInput = document.querySelector("input[name='role']:checked");
+    const requestedRole = roleInput?.value;
+
+    if (!requestedRole) {
+      alert("Please select a user type.");
+      return;
+    }
+
+    if (password !== confirm) {
+      alert("Passwords do not match.");
+      return;
+    }
+
+    try {
+      // Create auth user
+      await signup(email, password);
+
+      // Login immediately
+      await login(email, password);
+
+      const session = getSession();
+      if (!session) {
+        throw new Error("Session not available after signup");
+      }
+
+      // Initialize profile in backend
+      await fetch("http://localhost:8000/auth/init-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          requested_role: requestedRole
+        })
+      });
+
+      window.location.hash = "#/dashboard";
+
+    } catch (err) {
+      alert(err.message || "Signup failed");
+    }
+  });
+}
+
+======================================================================
+FILE: frontend\scripts\profileApi.js
+======================================================================
+import { getSession, setProfile } from "./session.js";
+
+export async function fetchProfile() {
+  const session = getSession();
+
+  const res = await fetch("http://localhost:8000/auth/me", {
+    headers: {
+      Authorization: `Bearer ${session.access_token}`
+    }
+  });
+
+  if (!res.ok) throw new Error("Unauthorized");
+  const data = await res.json();
+  setProfile(data);
+}
+
+======================================================================
+FILE: frontend\scripts\session.js
+======================================================================
+let session = null;
+let profile = null;
+
+export function setSession(s) {
+  session = s;
+}
+
+export function getSession() {
+  return session;
+}
+
+export function setProfile(p) {
+  profile = p;
+}
+
+export function getProfile() {
+  return profile;
+}
+
+export function clearSession() {
+  session = null;
+  profile = null;
+}
+
+======================================================================
+FILE: frontend\scripts\state.js
+======================================================================
+import { getProfile } from "./session.js";
+
+export function isAdmin() {
+  return getProfile()?.role === "admin";
+}
+
+export function isFaculty() {
+  return getProfile()?.role === "faculty";
+}
+
+======================================================================
+FILE: frontend\scripts\supabase.js
+======================================================================
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://tivwxpzuieawkjbiokoy.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdnd4cHp1aWVhd2tqYmlva295Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MjczMDgsImV4cCI6MjA4NDMwMzMwOH0.lwBcwVa-hZWRpVqLznVXWmAIKy9NgXrJmlrEmcxv_Qo";
+
+export const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+======================================================================
+FILE: frontend\styles\base.css
+======================================================================
+* {
+  box-sizing: border-box;
+}
+
+======================================================================
+FILE: frontend\views\Dashboard.css
+======================================================================
+.dashboard-page {
+  min-height: 100vh;
+  background: #f4f7fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-card {
+  background: white;
+  padding: 32px;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+  width: 100%;
+  max-width: 420px;
+}
+
+.dashboard-card h2 {
+  margin-bottom: 16px;
+}
+
+.dashboard-card p {
+  margin-bottom: 8px;
+}
+
+.dashboard-note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+======================================================================
+FILE: frontend\views\Dashboard.js
+======================================================================
+import { getSession } from "../scripts/session.js";
+
+export function Dashboard() {
+  const session = getSession();
+
+  if (!session) {
+    return `<h2>Not authenticated</h2>`;
+  }
+
+  fetch("http://localhost:8000/auth/me", {
+    headers: {
+      Authorization: `Bearer ${session.access_token}`
+    }
+  })
+    .then(res => res.json())
+    .then(user => {
+      document.getElementById("userEmail").innerText = user.email;
+      document.getElementById("userRole").innerText = user.role || "faculty";
+    })
+    .catch(err => {
+      console.error(err);
+    });
+
+  return `
+    <section class="dashboard">
+      <h2>Dashboard</h2>
+
+      <p><strong>Email:</strong> <span id="userEmail">Loading...</span></p>
+      <p><strong>User Type:</strong> <span id="userRole">Loading...</span></p>
+
+      <p>This is a placeholder dashboard.</p>
+    </section>
+  `;
+}
+
+======================================================================
+FILE: frontend\views\Landing.css
+======================================================================
+.hero {
+  background: white;
+  text-align: center;
+  padding: 80px 20px 60px;
+}
+
+.hero h1 {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.hero p {
+  max-width: 520px;
+  margin: 0 auto 24px;
+  color: #475569;
+  font-size: 14px;
+}
+
+======================================================================
+FILE: frontend\views\Landing.js
+======================================================================
+import { FeatureCard } from "../components/FeatureCard.js";
+
+export function Landing() {
+  return `
+    <section class="hero">
+      <h1>Welcome to ScholarSync</h1>
+      <p>
+        Your ultimate academic management platform for seamless learning
+        experiences.
+      </p>
+      <button class="btn-primary btn-large">Explore Features</button>
+    </section>
+
+    <section class="features">
+      ${FeatureCard(
+        "📅",
+        "Schedules",
+        "Manage your academic timetable effortlessly with our scheduling tools."
+      )}
+      ${FeatureCard(
+        "👥",
+        "Attendance",
+        "Keep track of attendance efficiently with our comprehensive tracking features."
+      )}
+      ${FeatureCard(
+        "🤖",
+        "AI Tools",
+        "Leverage AI to enhance learning and administrative processes efficiently."
+      )}
+    </section>
+
+    <footer class="footer">
+      © 2023 ScholarSync. All rights reserved.
+    </footer>
+  `;
+}
+
+======================================================================
+FILE: frontend\views\Login.css
+======================================================================
+/* PAGE BACKGROUND */
+.login-page {
+  min-height: 100vh;
+  background: #f4f7fb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* CARD */
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 36px 32px;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.08);
+}
+
+/* ICON */
+.login-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.login-icon img {
+  width: 36px;
+  height: 36px;
+}
+
+/* TITLE */
+.login-title {
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 24px;
+}
+
+/* TABS */
+.login-tabs {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 28px;
+}
+
+.login-tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0f172a;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+.login-tab.active {
+  background: #ffffff;
+  border: 2px solid #0f172a;
+}
+
+/* FORM */
+.login-form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* FIELD */
+.login-field {
+  margin-bottom: 18px;
+}
+
+.login-field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+/* INPUT WITH ICON */
+.login-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-input-icon img {
+  width: 18px;
+  height: 18px;
+}
+
+.login-input-wrapper input {
+  width: 100%;
+  display: block;
+  padding: 12px 14px 12px 42px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.login-input-wrapper input::placeholder {
+  color: #94a3b8;
+}
+
+.login-input-wrapper input:focus {
+  outline: none;
+  border-color: #0f172a;
+}
+
+/* SUBMIT BUTTON */
+.login-submit {
+  margin-top: 16px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  background: linear-gradient(180deg, #0f172a, #020617);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+
+.login-submit:hover {
+  opacity: 0.95;
+}
+
+======================================================================
+FILE: frontend\views\Login.js
+======================================================================
+export function Login() {
+  return `
+    <section class="login-page">
+      <div class="login-card">
+
+        <div class="login-icon">
+          <img 
+            src="./resources/favicons/graduation-cap.svg" 
+            alt="EduManage"
+          />
+        </div>
+
+        <h2 class="login-title">Welcome to EduManage</h2>
+
+        <div class="login-tabs">
+          <a href="#/login" class="login-tab active">Login</a>
+          <a href="#/signup" class="login-tab">Sign Up</a>
+        </div>
+
+        <form class="login-form" id="loginForm">
+
+          <div class="login-field">
+            <label for="email">Email</label>
+            <div class="login-input-wrapper">
+              <span class="login-input-icon">
+                <img src="./resources/icons/mail.svg" alt="" />
+              </span>
+              <input id="email" type="email" required placeholder="user@edu.com" />
+            </div>
+          </div>
+
+          <div class="login-field">
+            <label for="password">Password</label>
+            <div class="login-input-wrapper">
+              <span class="login-input-icon">
+                <img src="./resources/icons/lock.svg" alt="" />
+              </span>
+              <input id="password" type="password" required placeholder="••••••••" />
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary login-submit">
+            Login
+          </button>
+
+        </form>
+      </div>
+    </section>
+  `;
+}
+
+======================================================================
+FILE: frontend\views\Signup.css
+======================================================================
+
+======================================================================
+FILE: frontend\views\Signup.js
+======================================================================
+export function Signup() {
+  return `
+    <section class="login-page">
+      <div class="login-card">
+
+        <!-- Icon -->
+        <div class="login-icon">
+          <img 
+            src="./resources/favicons/graduation-cap.svg" 
+            alt="EduManage"
+          />
+        </div>
+
+        <!-- Title -->
+        <h2 class="login-title">Create your account</h2>
+
+        <!-- Tabs -->
+        <div class="login-tabs">
+          <a href="#/login" class="login-tab">
+            Login
+          </a>
+          <a href="#/signup" class="login-tab active">
+            Sign Up
+          </a>
+        </div>
+
+        <!-- Form -->
+        <form class="login-form" id="signupForm">
+
+          <!-- Email -->
+          <div class="login-field">
+            <label for="signup-email">Email</label>
+            <div class="login-input-wrapper">
+              <span class="login-input-icon">
+                <img 
+                  src="./resources/icons/mail.svg" 
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
+              <input 
+                id="signup-email"
+                type="email"
+                placeholder="user@edu.com"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Password -->
+          <div class="login-field">
+            <label for="signup-password">Password</label>
+            <div class="login-input-wrapper">
+              <span class="login-input-icon">
+                <img 
+                  src="./resources/icons/lock.svg" 
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
+              <input 
+                id="signup-password"
+                type="password"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Confirm Password -->
+          <div class="login-field">
+            <label for="signup-confirm">Confirm Password</label>
+            <div class="login-input-wrapper">
+              <span class="login-input-icon">
+                <img 
+                  src="./resources/icons/lock.svg" 
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
+              <input 
+                id="signup-confirm"
+                type="password"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Role Selection -->
+          <div class="login-field">
+            <label>User Type</label>
+            <div class="signup-roles">
+
+              <label class="signup-role">
+                <input 
+                  type="radio" 
+                  name="role" 
+                  value="faculty" 
+                />
+                <span>Faculty</span>
+              </label>
+
+              <label class="signup-role">
+                <input 
+                  type="radio" 
+                  name="role" 
+                  value="admin" 
+                />
+                <span>Admin</span>
+              </label>
+
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <button 
+            type="submit" 
+            class="btn-primary login-submit"
+          >
+            Create Account
+          </button>
+
+        </form>
+      </div>
+    </section>
+  `;
+}
