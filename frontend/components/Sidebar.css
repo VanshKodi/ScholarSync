@@ -1,0 +1,90 @@
+/* Basic sidebar layout */
+.sidebar {
+  width: 240px;
+  min-height: calc(100vh - 0px); /* full height (header is sticky separately) */
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  padding: 12px;
+  box-sizing: border-box;
+  position: sticky;   /* keep sidebar visible while scrolling */
+  top: 56px;          /* offset to clear the sticky navbar (adjust if needed) */
+  transition: width 0.18s ease;
+  overflow: hidden;
+}
+
+/* Collapsed state */
+.sidebar.collapsed {
+  width: 64px;
+}
+
+/* Header inside sidebar */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Toggle button */
+.toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+}
+
+/* Nav items */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  color: #0f172a;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.nav-item:hover {
+  background: #f8fafc;
+}
+
+.nav-item .icon {
+  width: 24px;
+  text-align: center;
+  font-size: 16px;
+}
+
+/* When sidebar collapsed, hide .nav-text */
+.sidebar.collapsed .nav-text {
+  display: none;
+}
+
+/* Sub-links (collapsible groups) */
+.subgroup {
+  display: flex;
+  flex-direction: column;
+  margin-left: 4px;
+  gap: 4px;
+  padding-left: 6px;
+  border-left: 2px dashed rgba(15,23,42,0.03);
+}
+
+.sub-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* active link */
+.nav-item.active {
+  background: #eef2ff;
+}

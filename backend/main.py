@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+
+# uvicorn main:app --reload --port 8000
+
 # Load env vars
 load_dotenv()
 

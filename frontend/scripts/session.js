@@ -36,3 +36,6 @@ export function clearSession() {
   localStorage.removeItem("ss_session");
   localStorage.removeItem("ss_profile");
 }
+export function isAdmin() {
+  return profile && profile.role === 'admin';
+}

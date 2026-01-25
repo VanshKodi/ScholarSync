@@ -1,10 +1,16 @@
 .navbar {
   background: white;
-  padding: 16px 32px;
+  padding: 10px 24px;           /* reduced vertical padding -> less height */
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #e5e7eb;
+
+  position: sticky;             /* make navbar sticky */
+  top: 0;
+  z-index: 1000;               /* ensure it sits above content */
+  /* small shadow for separation (optional) */
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
 }
 
 .navbar-left {
@@ -14,7 +20,7 @@
 }
 
 .navbar-logo {
-  width: 32px;
+  width: 28px;                 /* slightly smaller logo */
   height: auto;
 }
 a{
