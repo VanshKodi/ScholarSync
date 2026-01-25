@@ -15,7 +15,6 @@ export function Sidebar(chats = []) {
   return `
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <span class="nav-text"><strong>ScholarSync</strong></span>
         <button id="sidebarToggle" class="toggle-btn" aria-label="Toggle sidebar">
           <img src="./resources/icons/menu.svg" alt="Toggle" style="width: 20px; height: 20px;" />
         </button>
