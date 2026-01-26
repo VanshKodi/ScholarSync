@@ -1,6 +1,6 @@
 :root {
   --navbar-height: 56px;            /* adjust if your navbar height differs */
-  --sidebar-width: 240px;
+  --sidebar-width: 200px;
   --sidebar-collapsed-width: 64px;
 }
 
