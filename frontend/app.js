@@ -140,9 +140,26 @@ async function render() {
         console.warn("No #sidebar-root found; skipping sidebar injection.");
       }
     } else {
-      if (sidebarRoot) sidebarRoot.innerHTML = "";
-      // ensure main has no left margin if you want full-width pages:
-      // document.getElementById('app').style.marginLeft = '0';
+      if (sidebarRoot) {
+        // remove sidebar DOM (empty it)
+        sidebarRoot.innerHTML = "";
+
+        // remove dynamically added sidebar stylesheet so the layout isn't pushed on pages without the sidebar
+        const sidebarCss = document.getElementById("sidebar-css");
+        if (sidebarCss) {
+          sidebarCss.remove();
+        }
+
+        // clear any stateful classes that may influence layout
+        sidebarRoot.classList.remove("collapsed");
+        document.body.classList.remove("sidebar-collapsed");
+
+        // ensure #app has no leftover inline margin-left
+        const appEl = document.getElementById("app");
+        if (appEl) {
+          appEl.style.marginLeft = "";
+        }
+      }
     }
   } catch (err) {
     console.error("Render error:", err);
@@ -160,5 +177,6 @@ window.addEventListener("unhandledrejection", (ev) => {
   hideLoader();
 });
 
+// Ensure render runs on initial page load and on hash changes
 window.addEventListener("hashchange", render);
 window.addEventListener("load", render);
