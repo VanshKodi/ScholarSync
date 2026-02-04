@@ -61,13 +61,13 @@
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 5px;
   padding: 8px;
   border-radius: 6px;
   color: #0f172a;
