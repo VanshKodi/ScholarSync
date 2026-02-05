@@ -2,6 +2,7 @@
 -- PostgreSQL database dump
 --
 
+
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.1
 
@@ -36,6 +37,72 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: chat_message_citations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chat_message_citations (
+    citation_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    message_id uuid NOT NULL,
+    chunk_id uuid NOT NULL,
+    score double precision,
+    snippet text NOT NULL,
+    start_char integer,
+    end_char integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: chat_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chat_messages (
+    message_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    chat_id uuid NOT NULL,
+    message_index integer NOT NULL,
+    role text NOT NULL,
+    content text NOT NULL,
+    embedding_model text,
+    embedding public.vector(384),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chat_messages_role_check CHECK ((role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text])))
+);
+
+
+--
+-- Name: chat_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chat_sessions (
+    chat_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    university_id uuid NOT NULL,
+    created_by uuid NOT NULL,
+    title text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: chat_tool_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.chat_tool_runs (
+    tool_run_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    chat_id uuid NOT NULL,
+    message_id uuid NOT NULL,
+    tool_name text NOT NULL,
+    status text DEFAULT 'success'::text NOT NULL,
+    input_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    code text,
+    output_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    error_text text,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    CONSTRAINT chat_tool_runs_status_check CHECK ((status = ANY (ARRAY['success'::text, 'error'::text])))
+);
+
+
+--
 -- Name: document_chunks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -44,7 +111,10 @@ CREATE TABLE public.document_chunks (
     doc_id uuid NOT NULL,
     chunk_index integer NOT NULL,
     text_content text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    chunk_type text DEFAULT 'text'::text NOT NULL,
+    chunk_meta jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT document_chunks_chunk_type_check CHECK ((chunk_type = ANY (ARRAY['text'::text, 'pdf'::text, 'csv'::text, 'excel'::text])))
 );
 
 
@@ -135,6 +205,54 @@ CREATE TABLE public.universities (
 
 
 --
+-- Name: chat_message_citations chat_message_citations_message_id_chunk_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_message_citations
+    ADD CONSTRAINT chat_message_citations_message_id_chunk_id_key UNIQUE (message_id, chunk_id);
+
+
+--
+-- Name: chat_message_citations chat_message_citations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_message_citations
+    ADD CONSTRAINT chat_message_citations_pkey PRIMARY KEY (citation_id);
+
+
+--
+-- Name: chat_messages chat_messages_chat_id_message_index_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_messages
+    ADD CONSTRAINT chat_messages_chat_id_message_index_key UNIQUE (chat_id, message_index);
+
+
+--
+-- Name: chat_messages chat_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_messages
+    ADD CONSTRAINT chat_messages_pkey PRIMARY KEY (message_id);
+
+
+--
+-- Name: chat_sessions chat_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_sessions
+    ADD CONSTRAINT chat_sessions_pkey PRIMARY KEY (chat_id);
+
+
+--
+-- Name: chat_tool_runs chat_tool_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_tool_runs
+    ADD CONSTRAINT chat_tool_runs_pkey PRIMARY KEY (tool_run_id);
+
+
+--
 -- Name: document_chunks document_chunks_doc_id_chunk_index_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -207,10 +325,129 @@ ALTER TABLE ONLY public.universities
 
 
 --
+-- Name: idx_chat_message_citations_chunk_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_message_citations_chunk_id ON public.chat_message_citations USING btree (chunk_id);
+
+
+--
+-- Name: idx_chat_message_citations_message_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_message_citations_message_id ON public.chat_message_citations USING btree (message_id);
+
+
+--
+-- Name: idx_chat_messages_chat_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_chat_id ON public.chat_messages USING btree (chat_id);
+
+
+--
+-- Name: idx_chat_messages_chat_id_message_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_chat_id_message_index ON public.chat_messages USING btree (chat_id, message_index);
+
+
+--
+-- Name: idx_chat_messages_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_created_at ON public.chat_messages USING btree (created_at);
+
+
+--
+-- Name: idx_chat_messages_embedding; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_embedding ON public.chat_messages USING ivfflat (embedding) WITH (lists='50');
+
+
+--
+-- Name: idx_chat_messages_embedding_model; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_embedding_model ON public.chat_messages USING btree (embedding_model);
+
+
+--
+-- Name: idx_chat_messages_fts; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_fts ON public.chat_messages USING gin (to_tsvector('english'::regconfig, content));
+
+
+--
+-- Name: idx_chat_messages_role; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_messages_role ON public.chat_messages USING btree (role);
+
+
+--
+-- Name: idx_chat_sessions_created_by; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_sessions_created_by ON public.chat_sessions USING btree (created_by);
+
+
+--
+-- Name: idx_chat_sessions_university; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_sessions_university ON public.chat_sessions USING btree (university_id);
+
+
+--
+-- Name: idx_chat_tool_runs_chat_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_tool_runs_chat_id ON public.chat_tool_runs USING btree (chat_id);
+
+
+--
+-- Name: idx_chat_tool_runs_message_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_tool_runs_message_id ON public.chat_tool_runs USING btree (message_id);
+
+
+--
+-- Name: idx_chat_tool_runs_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_tool_runs_status ON public.chat_tool_runs USING btree (status);
+
+
+--
+-- Name: idx_chat_tool_runs_tool_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_chat_tool_runs_tool_name ON public.chat_tool_runs USING btree (tool_name);
+
+
+--
+-- Name: idx_document_chunks_chunk_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_chunks_chunk_type ON public.document_chunks USING btree (chunk_type);
+
+
+--
 -- Name: idx_document_chunks_doc_id; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_document_chunks_doc_id ON public.document_chunks USING btree (doc_id);
+
+
+--
+-- Name: idx_document_chunks_fts; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_document_chunks_fts ON public.document_chunks USING gin (to_tsvector('english'::regconfig, text_content));
 
 
 --
@@ -284,6 +521,13 @@ CREATE INDEX idx_embeddings_chunk ON public.embeddings USING btree (chunk_id);
 
 
 --
+-- Name: idx_embeddings_vector; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_embeddings_vector ON public.embeddings USING ivfflat (vector) WITH (lists='100');
+
+
+--
 -- Name: idx_profiles_role; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -302,6 +546,62 @@ CREATE INDEX idx_profiles_status ON public.profiles USING btree (status);
 --
 
 CREATE INDEX idx_profiles_university_id ON public.profiles USING btree (university_id);
+
+
+--
+-- Name: chat_message_citations chat_message_citations_chunk_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_message_citations
+    ADD CONSTRAINT chat_message_citations_chunk_id_fkey FOREIGN KEY (chunk_id) REFERENCES public.document_chunks(chunk_id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_message_citations chat_message_citations_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_message_citations
+    ADD CONSTRAINT chat_message_citations_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.chat_messages(message_id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_messages chat_messages_chat_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_messages
+    ADD CONSTRAINT chat_messages_chat_id_fkey FOREIGN KEY (chat_id) REFERENCES public.chat_sessions(chat_id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_sessions chat_sessions_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_sessions
+    ADD CONSTRAINT chat_sessions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_sessions chat_sessions_university_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_sessions
+    ADD CONSTRAINT chat_sessions_university_id_fkey FOREIGN KEY (university_id) REFERENCES public.universities(university_id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_tool_runs chat_tool_runs_chat_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_tool_runs
+    ADD CONSTRAINT chat_tool_runs_chat_id_fkey FOREIGN KEY (chat_id) REFERENCES public.chat_sessions(chat_id) ON DELETE CASCADE;
+
+
+--
+-- Name: chat_tool_runs chat_tool_runs_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.chat_tool_runs
+    ADD CONSTRAINT chat_tool_runs_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.chat_messages(message_id) ON DELETE CASCADE;
 
 
 --
@@ -390,6 +690,100 @@ ALTER TABLE ONLY public.profiles
 
 ALTER TABLE ONLY public.profiles
     ADD CONSTRAINT profiles_university_id_fkey FOREIGN KEY (university_id) REFERENCES public.universities(university_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: chat_message_citations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.chat_message_citations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: chat_message_citations chat_message_citations_insert_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_message_citations_insert_own ON public.chat_message_citations FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
+   FROM (public.chat_messages m
+     JOIN public.chat_sessions cs ON ((cs.chat_id = m.chat_id)))
+  WHERE ((m.message_id = chat_message_citations.message_id) AND (cs.created_by = auth.uid())))));
+
+
+--
+-- Name: chat_message_citations chat_message_citations_select_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_message_citations_select_own ON public.chat_message_citations FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM (public.chat_messages m
+     JOIN public.chat_sessions cs ON ((cs.chat_id = m.chat_id)))
+  WHERE ((m.message_id = chat_message_citations.message_id) AND (cs.created_by = auth.uid())))));
+
+
+--
+-- Name: chat_messages; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: chat_messages chat_messages_insert_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_messages_insert_own ON public.chat_messages FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.chat_sessions cs
+  WHERE ((cs.chat_id = chat_messages.chat_id) AND (cs.created_by = auth.uid())))));
+
+
+--
+-- Name: chat_messages chat_messages_select_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_messages_select_own ON public.chat_messages FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.chat_sessions cs
+  WHERE ((cs.chat_id = chat_messages.chat_id) AND (cs.created_by = auth.uid())))));
+
+
+--
+-- Name: chat_sessions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: chat_sessions chat_sessions_delete_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_sessions_delete_own ON public.chat_sessions FOR DELETE TO authenticated USING ((created_by = auth.uid()));
+
+
+--
+-- Name: chat_sessions chat_sessions_insert_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_sessions_insert_own ON public.chat_sessions FOR INSERT TO authenticated WITH CHECK (((created_by = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM public.profiles p
+  WHERE ((p.id = auth.uid()) AND (p.status = 'active'::text) AND (p.university_id = chat_sessions.university_id))))));
+
+
+--
+-- Name: chat_sessions chat_sessions_select_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_sessions_select_own ON public.chat_sessions FOR SELECT TO authenticated USING ((created_by = auth.uid()));
+
+
+--
+-- Name: chat_tool_runs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.chat_tool_runs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: chat_tool_runs chat_tool_runs_select_own; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY chat_tool_runs_select_own ON public.chat_tool_runs FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.chat_sessions cs
+  WHERE ((cs.chat_id = chat_tool_runs.chat_id) AND (cs.created_by = auth.uid())))));
 
 
 --
@@ -498,6 +892,18 @@ CREATE POLICY documents_select_by_scope ON public.documents FOR SELECT TO authen
 --
 
 ALTER TABLE public.embeddings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: embeddings embeddings_select_by_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY embeddings_select_by_scope ON public.embeddings FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM (((public.document_chunks c
+     JOIN public.documents d ON ((d.doc_id = c.doc_id)))
+     JOIN public.document_scope s ON ((s.document_group_id = d.document_group_id)))
+     JOIN public.profiles p ON ((p.id = auth.uid())))
+  WHERE ((c.chunk_id = embeddings.chunk_id) AND (p.status = 'active'::text) AND (((s.scope_type = 'university'::text) AND (s.owner_university_id = p.university_id)) OR ((s.scope_type = 'user'::text) AND (s.owner_user_id = auth.uid())))))));
+
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
