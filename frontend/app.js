@@ -38,25 +38,52 @@ async function loadModuleIntoDashboard(modulePath, exportName = null) {
       (exportName && mod[exportName]) ||
       Object.values(mod).find((v) => typeof v === "function");
 
-    const target = document.getElementById("dashboard-content");
+    const getTarget = () => document.getElementById("dashboard-content");
+    let target = getTarget();
     if (!target) {
-      console.warn("No #dashboard-content element found to render view.");
-      return;
+      // The dashboard content may not yet be in the DOM if the router
+      // hasn't finished rendering; wait briefly for it to appear.
+      const maxAttempts = 50; // ~2.5s
+      for (let i = 0; i < maxAttempts && !target; i++) {
+        await new Promise((res) => setTimeout(res, 50));
+        target = getTarget();
+      }
+    }
+
+    if (!target) {
+      // As a last resort create a fallback container so the view can render
+      const appRoot = document.getElementById("app") || document.body;
+      const fallback = document.createElement("main");
+      fallback.id = "dashboard-content";
+      fallback.className = "dashboard-content";
+      appRoot.appendChild(fallback);
+      target = fallback;
+      console.warn("Created fallback #dashboard-content element to render view.");
     }
 
     if (!renderFn) {
-      target.innerHTML = `<p>View could not be loaded.</p>`;
+      target.innerHTML = `
+        <div class="maincontent-placeholder">
+          <h3>Placeholder</h3>
+          <p>The view for <strong>${modulePath}</strong> is not implemented yet.</p>
+        </div>
+      `;
       return;
     }
 
     const result = renderFn();
     target.innerHTML = result instanceof Promise ? await result : result;
 
-  } catch (err) {
-    console.error("Failed to load module", modulePath, err);
-    const target = document.getElementById("dashboard-content");
-    if (target) target.innerHTML = `<p>Error loading view.</p>`;
-  }
+    } catch (err) {
+      console.error("Failed to load module", modulePath, err);
+      const target = document.getElementById("dashboard-content");
+      if (target) target.innerHTML = `
+        <div class="maincontent-placeholder">
+          <h3>Placeholder</h3>
+          <p>Unable to load <strong>${modulePath}</strong>. This view may not be created yet.</p>
+        </div>
+      `;
+    }
 }
 
 function attachSidebarHandlers() {

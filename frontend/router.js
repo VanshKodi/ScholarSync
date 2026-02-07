@@ -16,10 +16,14 @@ const routes = {
 
 export function router(app) {
   const path = window.location.hash || "#/";
-  const view = routes[path] || (() => "<h2>404</h2>");
 
-  // 🔒 Auth guard
-  if (path === "#/dashboard" && !getSession()) {
+  // Treat any /dashboard subpath as the Dashboard view so the dashboard
+  // layout (sidebar + content) remains present even for nested routes.
+  const isDashboardPath = path.startsWith("#/dashboard");
+  const view = isDashboardPath ? Dashboard : (routes[path] || (() => "<h2>404</h2>"));
+
+  // 🔒 Auth guard for dashboard paths
+  if (isDashboardPath && !getSession()) {
     window.location.hash = "#/login";
     return;
   }

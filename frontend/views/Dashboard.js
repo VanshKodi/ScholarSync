@@ -10,12 +10,10 @@ export function Dashboard() {
 
   const overviewHTML = DashboardOverview();
 
-  // The Dashboard view returns a layout with an area the sidebar will populate
-  // The main content region below has id="dashboard-content" — Sidebar link clicks will replace its innerHTML
+  // The Dashboard view returns the main content region the sidebar will
+  // populate (the sidebar container is the global aside in index.html).
   return `
     <section class="dashboard-layout">
-      <!-- Sidebar will be injected into #sidebar-root (global) -->
-      <aside id="sidebar-root"><!-- sidebar populates here --></aside>
       <main id="dashboard-content" class="dashboard-content">
         ${overviewHTML}
       </main>
