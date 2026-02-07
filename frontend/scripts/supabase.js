@@ -1,9 +1,18 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-const SUPABASE_URL = "https://tivwxpzuieawkjbiokoy.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdnd4cHp1aWVhd2tqYmlva295Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MjczMDgsImV4cCI6MjA4NDMwMzMwOH0.lwBcwVa-hZWRpVqLznVXWmAIKy9NgXrJmlrEmcxv_Qo";
+if (!window.__ENV__) {
+  throw new Error('window.__ENV__ is not defined (check script order in index.html)')
+}
+
+const { SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } = window.__ENV__
+
+if (!SUPABASE_PROJECT_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Supabase env vars missing')
+}
 
 export const supabase = createClient(
-  SUPABASE_URL,
+  SUPABASE_PROJECT_URL,
   SUPABASE_ANON_KEY
-);
+)
+
+export default supabase

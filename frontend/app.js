@@ -37,16 +37,21 @@ async function loadModuleIntoDashboard(modulePath, exportName = null) {
     const renderFn =
       (exportName && mod[exportName]) ||
       Object.values(mod).find((v) => typeof v === "function");
+
     const target = document.getElementById("dashboard-content");
     if (!target) {
       console.warn("No #dashboard-content element found to render view.");
       return;
     }
+
     if (!renderFn) {
       target.innerHTML = `<p>View could not be loaded.</p>`;
       return;
     }
-    target.innerHTML = renderFn();
+
+    const result = renderFn();
+    target.innerHTML = result instanceof Promise ? await result : result;
+
   } catch (err) {
     console.error("Failed to load module", modulePath, err);
     const target = document.getElementById("dashboard-content");
