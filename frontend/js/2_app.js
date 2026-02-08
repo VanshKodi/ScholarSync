@@ -1,7 +1,46 @@
 import { startRouter } from "./3_router.js";
 import { showLoader, hideLoader } from "./components/Loader.js";
+import { supabase } from "./utils/supabase.js";
+import { isAuthenticated, onAuthChange } from "./utils/auth.js";
 
-console.log("app.js loaded");
+const root = document.getElementById("root");
+
 showLoader("Loading ScholarSync...");
-setTimeout(hideLoader, 500);
-startRouter(document.getElementById("root"));
+
+(async () => {
+  // Extract OAuth tokens from hash if redirected from Google login
+  const hash = window.location.hash.slice(1);
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+
+  if (accessToken && refreshToken) {
+    await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken
+    });
+    window.history.replaceState(null, "", "#/");
+  }
+
+  // Check if user has an active session
+  const { data } = await supabase.auth.getSession();
+  const hasSession = !!data?.session;
+
+  // Start router and redirect authenticated users to dashboard
+  startRouter(root);
+
+  if (hasSession) {
+    window.location.hash = "#/dashboard";
+  }
+
+  hideLoader();
+})();
+
+// React to auth state changes
+onAuthChange((session) => {
+  if (session) {
+    window.location.hash = "#/dashboard";
+  } else {
+    window.location.hash = "#/";
+  }
+});

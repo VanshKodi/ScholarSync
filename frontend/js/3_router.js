@@ -1,4 +1,6 @@
 import Landing from "./views/Landing.js";
+import Login from "./views/Login.js";
+import Dashboard from "./views/Dashboard.js";
 const routes = [];
 console.log("router.js loaded");
 
@@ -7,6 +9,17 @@ routes.push({
   handler: ({ root }) => {
     Landing({ root });
   }
+});
+
+routes.push({
+  match: path => path === "/login",
+  handler: ({ root }) => {
+    Login({ root });
+  }
+});
+routes.push({
+  match: path => path === "/dashboard",
+  handler: ({ root }) => Dashboard({ root })
 });
 export function startRouter(root) {
   function resolve() {
