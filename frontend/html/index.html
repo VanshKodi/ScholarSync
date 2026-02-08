@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ScholarSync</title>
 
@@ -11,12 +11,22 @@
     <link rel="apple-touch-icon" href="../resources/favicons/apple-touch-icon.png">
     <link rel="manifest" href="../resources/favicons/site.webmanifest">
 
-    <meta name="theme-color" content="#0f172a">
 
+    <!-- Base styles only -->
+    <link rel="stylesheet" href="../css/base.css">
+    <link rel="stylesheet" href="../css/components/components.css">
+    <link rel="stylesheet" href="../css/views/views.css">
 </head>
 
 <body>
+    <!-- App Root -->
+    <div id="root"></div>
 
+    <!-- Public config -->
+    <script src="../js/1_config.js"></script>
+
+    <!-- App entry -->
+    <script type="module" src="../js/2_app.js"></script>
 </body>
 
 </html>
