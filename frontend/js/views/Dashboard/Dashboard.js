@@ -1,11 +1,13 @@
+// components (go up twice → js → components)
 import Navbar from "../../components/Navbar.js";
 import Sidebar from "../../components/Sidebar.js";
+import { DocumentUpload } from "../../components/DocumentUpload.js";
 
+// dashboard views (same folder)
 import { Overview } from "./Overview.js";
 import { Documents } from "./Documents.js";
 import { Profile } from "./Profile.js";
-import { Settings } from "./Settings.js";
-
+import { Settings } from "./Settings.js";   
 export default function Dashboard({ root }) {
   root.innerHTML = "";
 
@@ -18,30 +20,22 @@ export default function Dashboard({ root }) {
   main.className = "dashboard-main";
 
   function render(view) {
-    switch (view) {
-      case "documents":
-        Documents(main);
-        break;
-      case "profile":
-        Profile(main);
-        break;
-      case "settings":
-        Settings(main);
-        break;
-      default:
-        Overview(main);
+    main.innerHTML = "";
+
+    if (view === "documents") {
+      const upload = DocumentUpload();
+      main.appendChild(upload);
+      Documents(main);
+      return;
     }
+
+    Overview(main);
   }
 
-  const sidebar = Sidebar({
-    onSelect: render
-  });
+  const sidebar = Sidebar({ onSelect: render });
 
   render("overview");
 
-  layout.appendChild(sidebar);
-  layout.appendChild(main);
-
-  root.appendChild(navbar);
-  root.appendChild(layout);
+  layout.append(sidebar, main);
+  root.append(navbar, layout);
 }

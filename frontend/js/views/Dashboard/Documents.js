@@ -1,6 +1,20 @@
+import { DocumentUpload } from "../../components/DocumentUpload.js";
+
 export function Documents(container) {
-  container.innerHTML = `
-    <h1>Documents</h1>
-    <p>Your documents will appear here.</p>
-  `;
+  const wrapper = document.createElement("div");
+  wrapper.className = "documents-view";
+
+  const header = document.createElement("div");
+  header.className = "documents-header";
+
+  const title = document.createElement("h2");
+  title.textContent = "Documents";
+
+  const upload = DocumentUpload();
+
+  header.appendChild(title);
+  
+
+  wrapper.appendChild(header);
+  container.appendChild(wrapper);
 }
