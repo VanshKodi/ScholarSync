@@ -1,6 +1,6 @@
 import Landing from "./views/Landing.js";
 import Login from "./views/Login.js";
-import Dashboard from "./views/Dashboard.js";
+import Dashboard from "./views/Dashboard/Dashboard.js";
 const routes = [];
 console.log("router.js loaded");
 

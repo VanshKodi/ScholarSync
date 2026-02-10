@@ -124,3 +124,63 @@
   border-radius: 12px;
   text-align: center;
 }
+
+.sidebar {
+  width: 240px;
+  background: #fff;
+  border-right: 1px solid #eee;
+  transition: width 0.25s ease;
+  overflow-x: hidden;
+}
+
+.sidebar.collapsed {
+  width: 72px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  width: 100%;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.sidebar-item:hover {
+  background: #f4f6fb;
+}
+
+.icon {
+  font-size: 20px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.sidebar-section {
+  margin: 14px 14px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+}
+
+.sidebar.collapsed .label,
+.sidebar.collapsed .sidebar-section {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-item {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.sidebar::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 60px;
+  bottom: 0;
+  border-right: 1px dashed #e5e7eb;
+}
