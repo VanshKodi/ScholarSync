@@ -114,6 +114,10 @@ function openUploadPopup() {
 
     // BACKEND HOOK:
     // fetch("/api/documents/check-duplicate")
+    fetch("http://127.0.0.1:8000/ping")
+      .then(res => res.json())
+      .then(data => console.log("Backend says:", data))
+      .catch(err => console.error(err));
   };
 
   popup.querySelector(".cancel").onclick = () => overlay.remove();

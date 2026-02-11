@@ -1,1 +1,0 @@
-aider --openai-api-base http://127.0.0.1:1234/v1 --openai-api-key lm-studio --model openai/google/gemma-3-4b:2 --auto-commits --yes --no-show-model-warnings
