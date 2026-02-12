@@ -11,7 +11,7 @@ export default function Navbar() {
       <div class="nav-left">
         <a href="#/">
           <img
-            src="../resources/favicons/graduation-cap.svg"
+            src="./resources/favicons/graduation-cap.svg"
             class="navbar-logo"
             alt="ScholarSync"
           />

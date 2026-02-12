@@ -56,13 +56,13 @@ export default function Landing({ root }) {
   features.className = "features";
 
   features.appendChild(
-    card("../resources/images/schedule.png", "Schedules", "Manage your academic timetable effortlessly.")
+    card("./resources/images/schedule.png", "Schedules", "Manage your academic timetable effortlessly.")
   );
   features.appendChild(
-    card("../resources/images/attendance.png", "Attendance", "Track attendance efficiently.")
+    card("./resources/images/attendance.png", "Attendance", "Track attendance efficiently.")
   );
   features.appendChild(
-    card("../resources/images/ai-tools.png", "AI Tools", "Enhance learning with intelligent tools.")
+    card("./resources/images/ai-tools.png", "AI Tools", "Enhance learning with intelligent tools.")
   );
 
   // Assemble page
