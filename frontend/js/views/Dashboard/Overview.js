@@ -219,7 +219,85 @@ function renderProfile(container, profile, user) {
   </div>
   `;
 
+  // Render admin requests area placeholder
+  const adminArea = document.createElement('div');
+  adminArea.id = 'adminRequestsArea';
+  container.appendChild(adminArea);
+
   attachEvents(profile, user, container);
+
+  // If admin, load pending requests
+  if (profile.role === 'admin' && profile.university_id) {
+    loadAdminRequests(profile.university_id);
+  }
+}
+
+async function loadAdminRequests(universityId) {
+  const el = document.getElementById('adminRequestsArea');
+  if (!el) return;
+
+  el.innerHTML = '<h3>Pending Join Requests</h3><div id="requestsList">Loading...</div>';
+
+  const { data, error } = await supabase
+    .from('university_join_requests')
+    .select('*')
+    .eq('university_id', universityId)
+    .eq('status', 'pending');
+
+  const listEl = document.getElementById('requestsList');
+  if (error) {
+    listEl.innerText = 'Failed to load requests: ' + (error.message || error);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    listEl.innerText = 'No pending requests.';
+    return;
+  }
+
+  listEl.innerHTML = data.map(r => `
+    <div class="request-item" data-id="${r.request_id}" style="border:1px solid #ddd;padding:8px;margin:8px 0;">
+      <div><b>Requester:</b> ${r.requester_id}</div>
+      <div><b>Message:</b> ${r.message ?? ''}</div>
+      <div style="margin-top:8px;">
+        <button data-action="accept" class="acceptBtn">Accept</button>
+        <button data-action="reject" class="rejectBtn danger">Reject</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Attach handlers
+  listEl.querySelectorAll('.acceptBtn').forEach(btn => btn.addEventListener('click', async (e) => {
+    const id = e.target.closest('.request-item').dataset.id;
+    await handleRequestAction(id, 'accept');
+    loadAdminRequests(universityId);
+  }));
+
+  listEl.querySelectorAll('.rejectBtn').forEach(btn => btn.addEventListener('click', async (e) => {
+    const id = e.target.closest('.request-item').dataset.id;
+    await handleRequestAction(id, 'reject');
+    loadAdminRequests(universityId);
+  }));
+}
+
+async function handleRequestAction(requestId, action) {
+  try {
+    const resp = await fetch('/handle-join-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request_id: requestId, action })
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      alert('Failed: ' + text);
+      return;
+    }
+
+    alert('Request ' + action + 'ed');
+  } catch (err) {
+    alert('Error handling request: ' + err.message);
+  }
 }
 
 function renderRequestProfile(container, user) {

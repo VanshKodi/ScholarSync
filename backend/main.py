@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from routes import test
 from routes.testgemini import router as gemini_router 
 from routes.testsupabase import router as supabase_router 
+from routes.join_requests import router as join_requests_router
 from fastapi.middleware.cors import CORSMiddleware
 # To be used oterwhere
 from config.supabase import supabase
@@ -17,5 +18,5 @@ app.add_middleware(
 )
 app.include_router(test.router)
 app.include_router(gemini_router)
-
 app.include_router(supabase_router)
+app.include_router(join_requests_router)
