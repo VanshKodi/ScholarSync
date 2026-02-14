@@ -26,21 +26,69 @@ async function loadProfile(container, user) {
   renderProfile(container, profile, user);
 }
 function renderProfile(container, profile, user) {
-
-  const fields = Object.entries(profile)
-    .map(([key, value]) => `
-      <label>${key}</label>
-      <input value="${value ?? ""}" disabled />
-      <br>
-    `)
-    .join("");
-
   container.innerHTML = `
-    <h1>Profile Overview</h1>
-    <p><b>Email:</b> ${user.email}</p>
-    <hr>
-    ${fields}
-  `;
+  <h1>Profile Overview</h1>
+
+  <p><b>Email:</b> ${user.email}</p>
+
+  <table class="profile-table">
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Value</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <tr>
+        <td>Profile ID</td>
+        <td>
+          <input id="id" value="${profile.id}" disabled />
+        </td>
+        <td>-</td>
+      </tr>
+
+      <tr>
+        <td>Role</td>
+        <td>
+          <input id="role" value="${profile.role}" disabled />
+        </td>
+        <td>-</td>
+      </tr>
+
+      <tr>
+        <td>University ID</td>
+        <td>
+          <input id="university_id" value="${profile.university_id ?? ""}" disabled />
+        </td>
+        <td>
+          <button onclick="enableEdit('university_id')">Edit</button>
+        </td>
+      </tr>
+
+      <tr>
+        <td>Status</td>
+        <td>
+          <input id="status" value="${profile.status}" disabled />
+        </td>
+        <td>-</td>
+      </tr>
+
+      <tr>
+        <td>Created At</td>
+        <td>
+          <input value="${new Date(profile.created_at).toLocaleString()}" disabled />
+        </td>
+        <td>-</td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <br>
+  <button id="saveChanges">Save Changes</button>
+`;
 }
 function renderRequestButton(container, user) {
 
