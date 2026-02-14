@@ -27,6 +27,31 @@ async function loadProfile(container, user) {
 }
 function renderProfile(container, profile, user) {
   container.innerHTML = `
+  <style>
+.profile-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.profile-table th,
+.profile-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+.profile-table th {
+  background-color: #f4f4f4;
+  text-align: left;
+}
+
+.profile-table input {
+  width: 100%;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+</style>
   <h1>Profile Overview</h1>
 
   <p><b>Email:</b> ${user.email}</p>
