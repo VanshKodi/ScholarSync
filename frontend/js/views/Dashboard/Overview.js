@@ -1,34 +1,96 @@
 import { supabase } from "../../utils/supabase.js";
 
-const { data, error } = await supabase
-  .from("profiles")
-  .select("*");
-
-if (error) {
-  console.error(error);
-} else {
-  console.log(data);
-}
-
 export async function Overview(container) {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (error || !user) {
+  if (!user) {
     container.innerHTML = `<p>Not authenticated</p>`;
     return;
   }
 
-  const name =
-    user.user_metadata?.full_name ||
-    user.user_metadata?.name ||
-    user.email;
+  await loadProfile(container, user);
+}
+async function loadProfile(container, user) {
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    renderRequestButton(container, user);
+    return;
+  }
+
+  renderProfile(container, profile, user);
+}
+function renderProfile(container, profile, user) {
+
+  const fields = Object.entries(profile)
+    .map(([key, value]) => `
+      <label>${key}</label>
+      <input value="${value ?? ""}" disabled />
+      <br>
+    `)
+    .join("");
 
   container.innerHTML = `
-    <h1>Dashboard</h1>
-    <p>Welcome, ${name}</p>
+    <h1>Profile Overview</h1>
+    <p><b>Email:</b> ${user.email}</p>
     <hr>
-    Here is what we know about you , You can correct these if needed.
-    <br>
-    
+    ${fields}
   `;
+}
+function renderRequestButton(container, user) {
+
+  container.innerHTML = `
+    <h1>No Profile Found</h1>
+    <p>You are authenticated but do not have a profile ID.</p>
+    <button id="requestId">Request Profile ID</button>
+  `;
+
+  document.getElementById("requestId")
+    .addEventListener("click", async () => {
+
+      await requestProfile(user);
+      await loadProfile(container, user); // refresh
+    });
+}
+async function requestProfile(user) {
+
+  const { error } = await supabase
+    .from("profiles")
+    .insert([
+      {
+        id: user.id,
+        role: "student", // default role
+        university_id: crypto.randomUUID(), // or prompt user
+        status: "active"
+      }
+    ]);
+
+  if (error) {
+    console.error(error);
+    alert("Failed to create profile");
+  }
+}
+
+async function requestProfile(user) {
+  const { error } = await supabase
+    .from("profiles")
+    .upsert({
+      id: user.id,
+      role: "faculty", // default
+      university_id: 0,
+      status: "active"
+    });
+
+  if (error) {
+    console.error(error);
+    alert("Failed to create profile");
+    return;
+  }
+
+  alert("Profile created successfully");
 }
