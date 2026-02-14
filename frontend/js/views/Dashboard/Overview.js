@@ -19,7 +19,7 @@ async function loadProfile(container, user) {
     .maybeSingle();
 
   if (!profile) {
-    renderRequestButton(container, user);
+    renderRequestProfile(container, user);
     return;
   }
 
@@ -27,24 +27,18 @@ async function loadProfile(container, user) {
 }
 
 function renderProfile(container, profile, user) {
-
   const canChangeRole = profile.university_id === null;
 
   container.innerHTML = `
   <style>
-    .profile-wrapper {
+    .wrapper {
       max-width: 900px;
       margin: 40px auto;
       font-family: Arial, sans-serif;
     }
 
-    .profile-wrapper h1 {
+    .wrapper h1 {
       margin-bottom: 10px;
-    }
-
-    .profile-wrapper p {
-      margin-bottom: 20px;
-      color: #555;
     }
 
     .profile-table {
@@ -61,8 +55,7 @@ function renderProfile(container, profile, user) {
     }
 
     .profile-table th {
-      background-color: #f5f5f5;
-      font-weight: bold;
+      background: #f5f5f5;
     }
 
     .profile-table input {
@@ -78,30 +71,60 @@ function renderProfile(container, profile, user) {
       border-radius: 6px;
       border: none;
       cursor: pointer;
-      background-color: #007bff;
+      background: #007bff;
       color: white;
-      font-size: 13px;
     }
 
     .profile-table button:hover {
-      background-color: #0056b3;
+      background: #0056b3;
     }
 
-    .disabled-text {
+    .danger {
+      background: #dc3545;
+    }
+
+    .danger:hover {
+      background: #a71d2a;
+    }
+
+    .locked {
       color: gray;
       font-size: 13px;
     }
 
-    .danger-btn {
-      background-color: #dc3545;
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
-    .danger-btn:hover {
-      background-color: #a71d2a;
+    .hidden {
+      display: none;
+    }
+
+    .modal {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      width: 400px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
     }
   </style>
 
-  <div class="profile-wrapper">
+  <div class="wrapper">
     <h1>Profile Overview</h1>
     <p><b>Email:</b> ${user.email}</p>
 
@@ -118,7 +141,7 @@ function renderProfile(container, profile, user) {
         <tr>
           <td>Profile ID</td>
           <td><input value="${profile.id}" disabled /></td>
-          <td><span class="disabled-text">Cannot Change</span></td>
+          <td><span class="locked">Cannot Change</span></td>
         </tr>
 
         <tr>
@@ -127,8 +150,8 @@ function renderProfile(container, profile, user) {
           <td>
             ${
               canChangeRole
-                ? `<button id="changeRoleBtn">Change Role to Admin</button>`
-                : `<span class="disabled-text">Locked (University Assigned)</span>`
+                ? `<button id="changeRoleBtn">Become Admin</button>`
+                : `<span class="locked">Locked (University Assigned)</span>`
             }
           </td>
         </tr>
@@ -141,8 +164,8 @@ function renderProfile(container, profile, user) {
           <td>
             ${
               profile.university_id === null
-                ? `<button id="joinUniBtn">Join University</button>`
-                : `<button id="leaveUniBtn" class="danger-btn">Leave University</button>`
+                ? `<span class="locked">Not Assigned</span>`
+                : `<button id="leaveUniBtn" class="danger">Leave University</button>`
             }
           </td>
         </tr>
@@ -150,122 +173,128 @@ function renderProfile(container, profile, user) {
         <tr>
           <td>Status</td>
           <td><input value="${profile.status}" disabled /></td>
-          <td><span class="disabled-text">Cannot Change</span></td>
+          <td><span class="locked">Cannot Change</span></td>
         </tr>
 
         <tr>
           <td>Created At</td>
-          <td>
-            <input value="${new Date(profile.created_at).toLocaleString()}" disabled />
-          </td>
-          <td><span class="disabled-text">Cannot Change</span></td>
+          <td><input value="${new Date(profile.created_at).toLocaleString()}" disabled /></td>
+          <td><span class="locked">Cannot Change</span></td>
         </tr>
 
       </tbody>
     </table>
   </div>
+
+  <!-- Modal -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h3 id="modalTitle"></h3>
+      <p id="modalDescription"></p>
+      <div class="modal-actions">
+        <button id="modalConfirmBtn">Confirm</button>
+        <button id="modalCancelBtn" class="danger">Cancel</button>
+      </div>
+    </div>
+  </div>
   `;
 
-  attachEvents(profile, user);
+  attachEvents(profile, user, container);
 }
 
-function renderRequestButton(container, user) {
+function renderRequestProfile(container, user) {
   container.innerHTML = `
     <div style="max-width:600px;margin:60px auto;font-family:Arial;">
       <h1>No Profile Found</h1>
-      <p>You are authenticated but do not yet have a profile.</p>
-      <button id="requestProfileBtn"
+      <p>Create your profile to continue.</p>
+      <button id="createProfileBtn"
         style="padding:10px 14px;border:none;border-radius:6px;background:#28a745;color:white;cursor:pointer;">
         Create Profile
       </button>
     </div>
   `;
 
-  document
-    .getElementById("requestProfileBtn")
+  document.getElementById("createProfileBtn")
     ?.addEventListener("click", async () => {
-      await requestProfile(user);
+      await supabase.from("profiles").upsert({
+        id: user.id,
+        role: "faculty",
+        university_id: null,
+        status: "active"
+      });
+
       await loadProfile(container, user);
     });
 }
 
-async function requestProfile(user) {
-  const { error } = await supabase
-    .from("profiles")
-    .upsert({
-      id: user.id,
-      role: "faculty",
-      university_id: null,
-      status: "active"
-    });
-
-  if (error) {
-    console.error(error);
-    alert("Failed to create profile");
-    return;
-  }
-
-  alert("Profile created successfully");
-}
-
-function attachEvents(profile, user) {
+function attachEvents(profile, user, container) {
   const changeRoleBtn = document.getElementById("changeRoleBtn");
-  const joinUniBtn = document.getElementById("joinUniBtn");
   const leaveUniBtn = document.getElementById("leaveUniBtn");
 
   changeRoleBtn?.addEventListener("click", async () => {
     if (profile.university_id !== null) {
-      alert("Role change not allowed once university is assigned.");
+      alert("Role change not allowed.");
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: "admin" })
-      .eq("id", user.id);
+    openModal(
+      "Become University Admin",
+      "This will create a University entity and assign you as Admin.",
+      async () => {
 
-    if (error) {
-      console.error(error);
-      alert("Failed to change role");
-      return;
-    }
+        const { data: university, error: uniError } = await supabase
+          .from("universities")
+          .insert([{ name: user.email + "'s University" }])
+          .select()
+          .single();
 
-    alert("Role updated to Admin");
-    location.reload();
-  });
+        if (uniError) {
+          alert("Failed to create university.");
+          return;
+        }
 
-  joinUniBtn?.addEventListener("click", async () => {
-    const uniId = prompt("Enter University UUID:");
-    if (!uniId) return;
+        await supabase
+          .from("profiles")
+          .update({
+            role: "admin",
+            university_id: university.id
+          })
+          .eq("id", user.id);
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ university_id: uniId })
-      .eq("id", user.id);
-
-    if (error) {
-      console.error(error);
-      alert("Failed to join university");
-      return;
-    }
-
-    alert("University assigned");
-    location.reload();
+        alert("You are now Admin.");
+        location.reload();
+      }
+    );
   });
 
   leaveUniBtn?.addEventListener("click", async () => {
-    const { error } = await supabase
+    await supabase
       .from("profiles")
       .update({ university_id: null })
       .eq("id", user.id);
 
-    if (error) {
-      console.error(error);
-      alert("Failed to leave university");
-      return;
-    }
-
-    alert("University removed");
     location.reload();
   });
+}
+
+function openModal(title, description, onConfirm) {
+  const overlay = document.getElementById("modalOverlay");
+  const titleEl = document.getElementById("modalTitle");
+  const descEl = document.getElementById("modalDescription");
+  const confirmBtn = document.getElementById("modalConfirmBtn");
+  const cancelBtn = document.getElementById("modalCancelBtn");
+
+  titleEl.innerText = title;
+  descEl.innerText = description;
+
+  overlay.classList.remove("hidden");
+
+  confirmBtn.onclick = async () => {
+    await onConfirm();
+    overlay.classList.add("hidden");
+  };
+
+  cancelBtn.onclick = () => {
+    overlay.classList.add("hidden");
+  };
 }
