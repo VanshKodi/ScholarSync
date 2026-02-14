@@ -57,24 +57,6 @@ function renderRequestButton(container, user) {
       await loadProfile(container, user); // refresh
     });
 }
-async function requestProfile(user) {
-
-  const { error } = await supabase
-    .from("profiles")
-    .insert([
-      {
-        id: user.id,
-        role: "student", // default role
-        university_id: crypto.randomUUID(), // or prompt user
-        status: "active"
-      }
-    ]);
-
-  if (error) {
-    console.error(error);
-    alert("Failed to create profile");
-  }
-}
 
 async function requestProfile(user) {
   const { error } = await supabase
