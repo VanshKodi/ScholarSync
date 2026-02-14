@@ -64,6 +64,7 @@ async function requestProfile(user) {
     .upsert({
       id: user.id,
       role: "faculty", // default
+      university_id: null,
       status: "active"
     });
 
