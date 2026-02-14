@@ -71,7 +71,7 @@ function renderProfile(container, profile, user) {
         <td>
           <input id="id" value="${profile.id}" disabled />
         </td>
-        <td>-</td>
+        <td>Cannot Change</td>
       </tr>
 
       <tr>
@@ -79,7 +79,7 @@ function renderProfile(container, profile, user) {
         <td>
           <input id="role" value="${profile.role}" disabled />
         </td>
-        <td>-</td>
+        <td><button onclick="enableEdit('role')">Change role to Admin</button></td>
       </tr>
 
       <tr>
@@ -88,7 +88,7 @@ function renderProfile(container, profile, user) {
           <input id="university_id" value="${profile.university_id ?? ""}" disabled />
         </td>
         <td>
-          <button onclick="enableEdit('university_id')">Edit</button>
+          <button onclick="enableEdit('university_id')">Request to Join one</button>
         </td>
       </tr>
 
@@ -97,7 +97,7 @@ function renderProfile(container, profile, user) {
         <td>
           <input id="status" value="${profile.status}" disabled />
         </td>
-        <td>-</td>
+        <td>Cannot Change</td>
       </tr>
 
       <tr>
@@ -105,7 +105,7 @@ function renderProfile(container, profile, user) {
         <td>
           <input value="${new Date(profile.created_at).toLocaleString()}" disabled />
         </td>
-        <td>-</td>
+        <td>Cannot Change</td>
       </tr>
 
     </tbody>
