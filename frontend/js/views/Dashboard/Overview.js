@@ -1,7 +1,27 @@
 import { supabase } from "../../utils/supabase.js";
 
+async function waitForUser(timeout = 5000) {
+  // Try immediate session first
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData?.session?.user) return sessionData.session.user;
+
+  // Subscribe and wait for a sign-in event (short timeout)
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (sess?.user) {
+        sub.subscription.unsubscribe();
+        resolve(sess.user);
+      } else if (Date.now() - start > timeout) {
+        sub.subscription.unsubscribe();
+        resolve(null);
+      }
+    });
+  });
+}
+
 export async function Overview(container) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await waitForUser();
 
   if (!user) {
     container.innerHTML = `<p>Not authenticated</p>`;
@@ -242,6 +262,7 @@ function attachEvents(profile, user, container) {
       "This will create a University entity and assign you as Admin.",
       async () => {
 
+        // Create university (must be authenticated; RLS may block anon)
         const { data: university, error: uniError } = await supabase
           .from("universities")
           .insert([{ name: user.email + "'s University" }])
@@ -249,17 +270,33 @@ function attachEvents(profile, user, container) {
           .single();
 
         if (uniError) {
-          alert("Failed to create university.");
+          // Handle common RLS / permission failure
+          if (uniError.status === 403 || /permission denied/i.test(uniError.message || '')) {
+            alert("Permission denied creating university. Ensure you're signed in and your account is allowed to create a university.");
+            return;
+          }
+
+          alert("Failed to create university: " + (uniError.message || uniError));
           return;
         }
 
-        await supabase
+        const universityId = university?.university_id;
+
+        if (!universityId) {
+          alert("Unexpected response from server when creating university.");
+          return;
+        }
+
+        const { error: profError } = await supabase
           .from("profiles")
-          .update({
-            role: "admin",
-            university_id: university.id
-          })
+          .update({ role: "admin", university_id: universityId })
           .eq("id", user.id);
+
+        if (profError) {
+          // If profile update fails due to RLS, optionally roll back university creation.
+          alert("Failed to update profile: " + (profError.message || profError));
+          return;
+        }
 
         alert("You are now Admin.");
         location.reload();
