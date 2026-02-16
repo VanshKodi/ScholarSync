@@ -107,14 +107,18 @@ async function renderProfileArea(container, user) {
     btn.textContent = 'Become Admin (create university)';
     btn.onclick = () => becomeAdminFlow(user, container);
     adminArea.appendChild(btn);
-  }else if (profile.role === 'admin') {
+  } else if (profile.role === 'admin') {
     await renderAdminRequests(adminArea, profile.university_id);
-  }else if (profile.role !== 'admin') {
+  } else {
     const btn = document.createElement('button');
     btn.textContent = 'Join University(Apply)';
     btn.onclick = () => joinUniversityFlow(user, container);
     adminArea.appendChild(btn);
   }
+}
+
+async function renderAdminRequests(adminArea, universityId) {
+  // Placeholder for admin requests rendering
 }
 
 async function joinUniversityFlow(user, container) {
