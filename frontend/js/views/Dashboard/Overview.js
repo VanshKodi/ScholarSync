@@ -1,11 +1,11 @@
 import { supabase } from "../../utils/supabase.js";
 
+const API_BASE = 'https://scholarsync-3s4e.onrender.com';
+
 async function waitForUser(timeout = 5000) {
-  // Try immediate session first
   const { data: sessionData } = await supabase.auth.getSession();
   if (sessionData?.session?.user) return sessionData.session.user;
 
-  // Subscribe and wait for a sign-in event (short timeout)
   return new Promise((resolve) => {
     const start = Date.now();
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
@@ -20,425 +20,177 @@ async function waitForUser(timeout = 5000) {
   });
 }
 
+async function getAuthHeaders() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+async function apiFetch(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {}, await getAuthHeaders());
+  if (opts.body && !(opts.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+
+  const res = await fetch(API_BASE + path, Object.assign({}, opts, { headers }));
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    const err = new Error(text || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json().catch(() => ({}));
+}
+
 export async function Overview(container) {
   const user = await waitForUser();
-
   if (!user) {
     container.innerHTML = `<p>Not authenticated</p>`;
     return;
   }
 
-  await loadProfile(container, user);
+  await renderProfileArea(container, user);
 }
 
-async function loadProfile(container, user) {
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    renderRequestProfile(container, user);
-    return;
-  }
-
-  renderProfile(container, profile, user);
-}
-
-function renderProfile(container, profile, user) {
-  const canChangeRole = profile.university_id === null;
-
+async function renderProfileArea(container, user) {
+  // Minimal, easy-to-scan layout. Prefer backend actions for writes.
   container.innerHTML = `
-  <style>
-    .wrapper {
-      max-width: 900px;
-      margin: 40px auto;
-      font-family: Arial, sans-serif;
-    }
-
-    .wrapper h1 {
-      margin-bottom: 10px;
-    }
-
-    .profile-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-    }
-
-    .profile-table th,
-    .profile-table td {
-      border: 1px solid #ddd;
-      padding: 12px;
-      text-align: left;
-    }
-
-    .profile-table th {
-      background: #f5f5f5;
-    }
-
-    .profile-table input {
-      width: 100%;
-      padding: 6px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      background: #fafafa;
-    }
-
-    .profile-table button {
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      background: #007bff;
-      color: white;
-    }
-
-    .profile-table button:hover {
-      background: #0056b3;
-    }
-
-    .danger {
-      background: #dc3545;
-    }
-
-    .danger:hover {
-      background: #a71d2a;
-    }
-
-    .locked {
-      color: gray;
-      font-size: 13px;
-    }
-
-    /* Modal */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.4);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .modal {
-      background: white;
-      padding: 25px;
-      border-radius: 10px;
-      width: 400px;
-    }
-
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 20px;
-    }
-  </style>
-
-  <div class="wrapper">
-    <h1>Profile Overview</h1>
-    <p><b>Email:</b> ${user.email}</p>
-
-    <table class="profile-table">
-      <thead>
-        <tr>
-          <th>Field</th>
-          <th>Value</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-
-        <tr>
-          <td>Profile ID</td>
-          <td><input value="${profile.id}" disabled /></td>
-          <td><span class="locked">Cannot Change</span></td>
-        </tr>
-
-        <tr>
-          <td>Role</td>
-          <td><input value="${profile.role}" disabled /></td>
-          <td>
-            ${
-              canChangeRole
-                ? `<button id="changeRoleBtn">Become Admin</button>`
-                : `<span class="locked">Locked (University Assigned)</span>`
-            }
-          </td>
-        </tr>
-
-        <tr>
-          <td>University ID</td>
-          <td>
-            <input value="${profile.university_id ?? "Not Assigned"}" disabled />
-          </td>
-          <td>
-            ${
-              profile.university_id === null
-                ? `<span class="locked">Not Assigned</span>`
-                : `<button id="leaveUniBtn" class="danger">Leave University</button>`
-            }
-          </td>
-        </tr>
-
-        <tr>
-          <td>Status</td>
-          <td><input value="${profile.status}" disabled /></td>
-          <td><span class="locked">Cannot Change</span></td>
-        </tr>
-
-        <tr>
-          <td>Created At</td>
-          <td><input value="${new Date(profile.created_at).toLocaleString()}" disabled /></td>
-          <td><span class="locked">Cannot Change</span></td>
-        </tr>
-
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Modal -->
-  <div id="modalOverlay" class="modal-overlay hidden">
-    <div class="modal">
-      <h3 id="modalTitle"></h3>
-      <p id="modalDescription"></p>
-      <div class="modal-actions">
-        <button id="modalConfirmBtn">Confirm</button>
-        <button id="modalCancelBtn" class="danger">Cancel</button>
-      </div>
+    <div class="overview-wrapper" style="max-width:900px;margin:32px auto;font-family:Arial, sans-serif;">
+      <h1>Profile</h1>
+      <div id="profileInfo"></div>
+      <div id="adminArea" style="margin-top:18px;"></div>
     </div>
-  </div>
   `;
 
-  // Render admin requests area placeholder
-  const adminArea = document.createElement('div');
-  adminArea.id = 'adminRequestsArea';
-  container.appendChild(adminArea);
+  // Try to fetch profile from Supabase client (read). Backend can be used instead if you add an endpoint.
+  const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (error) {
+    document.getElementById('profileInfo').innerText = 'Failed to load profile.';
+    return;
+  }
 
-  attachEvents(profile, user, container);
+  if (!profile) {
+    document.getElementById('profileInfo').innerHTML = `<p>No profile found. <button id="createProfileBtn">Create profile</button></p>`;
+    document.getElementById('createProfileBtn').onclick = async () => {
+      // Prefer backend-controlled creation. Fallback to client-side upsert.
+      try {
+        await apiFetch('/profiles/create', { method: 'POST', body: { id: user.id } });
+      } catch (err) {
+        // fallback
+        await supabase.from('profiles').upsert({ id: user.id, role: 'faculty', university_id: null, status: 'active' });
+      }
+      await renderProfileArea(container, user);
+    };
+    return;
+  }
 
-  // If admin, load pending requests
+  // render compact profile
+  const info = `
+    <p><b>Email:</b> ${user.email}</p>
+    <p><b>Profile ID:</b> ${profile.id}</p>
+    <p><b>Role:</b> ${profile.role}</p>
+    <p><b>University ID:</b> ${profile.university_id ?? 'Not Assigned'}</p>
+    <p><b>Status:</b> ${profile.status}</p>
+  `;
+  document.getElementById('profileInfo').innerHTML = info;
+
+  const adminArea = document.getElementById('adminArea');
+  adminArea.innerHTML = '';
+
   if (profile.role === 'admin' && profile.university_id) {
-    loadAdminRequests(profile.university_id);
+    const btn = document.createElement('button');
+    btn.textContent = 'Manage Join Requests';
+    btn.onclick = () => renderAdminRequests(adminArea, profile.university_id);
+    adminArea.appendChild(btn);
+  } else if (profile.university_id === null) {
+    const btn = document.createElement('button');
+    btn.textContent = 'Become Admin (create university)';
+    btn.onclick = () => becomeAdminFlow(user, container);
+    adminArea.appendChild(btn);
   }
 }
 
-async function loadAdminRequests(universityId) {
-  const el = document.getElementById('adminRequestsArea');
-  if (!el) return;
-
-  el.innerHTML = '<h3>Pending Join Requests</h3><div id="requestsList">Loading...</div>';
-
-  const { data, error } = await supabase
-    .from('university_join_requests')
-    .select('*')
-    .eq('university_id', universityId)
-    .eq('status', 'pending');
-
+async function renderAdminRequests(container, universityId) {
+  container.innerHTML = '<h3>Pending Requests</h3><div id="requestsList">Loading...</div>';
   const listEl = document.getElementById('requestsList');
-  if (error) {
-    listEl.innerText = 'Failed to load requests: ' + (error.message || error);
-    return;
-  }
 
-  if (!data || data.length === 0) {
-    listEl.innerText = 'No pending requests.';
-    return;
-  }
+  // Prefer backend endpoint; fallback to direct Supabase read if backend not available
+  try {
+    const json = await apiFetch(`/admin/join-requests?university_id=${encodeURIComponent(universityId)}`);
+    const rows = json?.data ?? [];
+    if (!rows.length) return (listEl.innerText = 'No pending requests.');
 
-  listEl.innerHTML = data.map(r => `
+    listEl.innerHTML = rows.map(r => renderRequestItemHtml(r)).join('');
+    attachRequestButtons(listEl, universityId);
+  } catch (err) {
+    // fallback to supabase client
+    const { data, error } = await supabase.from('university_join_requests').select('*').eq('university_id', universityId).eq('status', 'pending');
+    if (error) return (listEl.innerText = 'Failed to load requests');
+    if (!data || !data.length) return (listEl.innerText = 'No pending requests.');
+    listEl.innerHTML = data.map(r => renderRequestItemHtml(r)).join('');
+    attachRequestButtons(listEl, universityId);
+  }
+}
+
+function renderRequestItemHtml(r) {
+  return `
     <div class="request-item" data-id="${r.request_id}" style="border:1px solid #ddd;padding:8px;margin:8px 0;">
       <div><b>Requester:</b> ${r.requester_id}</div>
       <div><b>Message:</b> ${r.message ?? ''}</div>
       <div style="margin-top:8px;">
         <button data-action="accept" class="acceptBtn">Accept</button>
-        <button data-action="reject" class="rejectBtn danger">Reject</button>
+        <button data-action="reject" class="rejectBtn">Reject</button>
       </div>
     </div>
-  `).join('');
+  `;
+}
 
-  // Attach handlers
-  listEl.querySelectorAll('.acceptBtn').forEach(btn => btn.addEventListener('click', async (e) => {
+function attachRequestButtons(listEl, universityId) {
+  listEl.querySelectorAll('.acceptBtn, .rejectBtn').forEach(btn => btn.addEventListener('click', async (e) => {
     const id = e.target.closest('.request-item').dataset.id;
-    await handleRequestAction(id, 'accept');
-    loadAdminRequests(universityId);
-  }));
-
-  listEl.querySelectorAll('.rejectBtn').forEach(btn => btn.addEventListener('click', async (e) => {
-    const id = e.target.closest('.request-item').dataset.id;
-    await handleRequestAction(id, 'reject');
-    loadAdminRequests(universityId);
+    const action = e.target.dataset.action;
+    try {
+      await handleRequestAction(id, action);
+      // reload
+      await renderAdminRequests(document.getElementById('adminArea'), universityId);
+    } catch (err) {
+      alert('Error: ' + (err.message || err));
+    }
   }));
 }
 
 async function handleRequestAction(requestId, action) {
+  // Backend-managed action; endpoint already added: POST /handle-join-request
+  await apiFetch('/handle-join-request', { method: 'POST', body: { request_id: requestId, action } });
+  alert('Request ' + action + 'ed');
+}
+
+async function becomeAdminFlow(user, container) {
+  if (!confirm('Create a University and become its admin?')) return;
+  const uniName = user.email + "'s University";
+
   try {
-    // get session token and call backend with Authorization header
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    if (!token) {
-      alert('Not authenticated');
-      return;
-    }
+    // Prefer backend creation which will perform all writes server-side (ignoring RLS)
+    const json = await apiFetch('/admin/create-university', { method: 'POST', body: { name: uniName } });
+    const universityId = json?.university?.university_id;
+    if (!universityId) throw new Error('invalid response');
 
-    const resp = await fetch('https://scholarsync-3s4e.onrender.com/handle-join-request', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ request_id: requestId, action })
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      alert('Failed: ' + text);
-      return;
-    }
-
-    alert('Request ' + action + 'ed');
+    // ask backend to attach profile to university
+    await apiFetch('/admin/assign-admin', { method: 'POST', body: { user_id: user.id, university_id: universityId } });
+    alert('You are now Admin');
+    await renderProfileArea(container, user);
   } catch (err) {
-    alert('Error handling request: ' + err.message);
-  }
-}
-
-function renderRequestProfile(container, user) {
-  container.innerHTML = `
-    <div style="max-width:600px;margin:60px auto;font-family:Arial;">
-      <h1>No Profile Found</h1>
-      <p>Create your profile to continue.</p>
-      <button id="createProfileBtn"
-        style="padding:10px 14px;border:none;border-radius:6px;background:#28a745;color:white;cursor:pointer;">
-        Create Profile
-      </button>
-    </div>
-  `;
-
-  document.getElementById("createProfileBtn")
-    ?.addEventListener("click", async () => {
-      await supabase.from("profiles").upsert({
-        id: user.id,
-        role: "faculty",
-        university_id: null,
-        status: "active"
-      });
-
-      await loadProfile(container, user);
-    });
-}
-
-function attachEvents(profile, user, container) {
-  const changeRoleBtn = document.getElementById("changeRoleBtn");
-  const leaveUniBtn = document.getElementById("leaveUniBtn");
-
-  changeRoleBtn?.addEventListener("click", async () => {
-    if (profile.university_id !== null) {
-      alert("Role change not allowed.");
-      return;
+    // fallback to client-side behavior if backend not present
+    try {
+      const { data: created, error: createErr } = await supabase.from('universities').insert([{ name: uniName }]).select().single();
+      if (createErr) throw createErr;
+      const universityId = created.university_id;
+      await supabase.from('profiles').update({ role: 'admin', university_id: universityId }).eq('id', user.id);
+      alert('You are now Admin');
+      await renderProfileArea(container, user);
+    } catch (e) {
+      alert('Failed to become admin: ' + (e.message || e));
     }
-
-    openModal(
-      "Become University Admin",
-      "This will create a University entity and assign you as Admin.",
-      async () => {
-
-        // Create or reuse university (handle unique constraint if it already exists)
-        const uniName = user.email + "'s University";
-        let university = null;
-
-        const { data: created, error: createErr } = await supabase
-          .from("universities")
-          .insert([{ name: uniName }])
-          .select()
-          .single();
-
-        if (createErr) {
-          // Permission denied (RLS)
-          if (createErr.status === 403 || /permission denied/i.test(createErr.message || '')) {
-            alert("Permission denied creating university. Ensure you're signed in and your account is allowed to create a university.");
-            return;
-          }
-
-          // Duplicate name -> fetch existing university row
-          if (/duplicate key value|already exists/i.test(createErr.message || '')) {
-            const { data: existing, error: fetchErr } = await supabase
-              .from('universities')
-              .select('*')
-              .eq('name', uniName)
-              .maybeSingle();
-
-            if (fetchErr || !existing) {
-              alert('Failed to locate existing university after duplicate key: ' + (fetchErr?.message || fetchErr));
-              return;
-            }
-
-            university = existing;
-          } else {
-            alert('Failed to create university: ' + (createErr.message || createErr));
-            return;
-          }
-        } else {
-          university = created;
-        }
-
-        const universityId = university?.university_id;
-
-        if (!universityId) {
-          alert("Unexpected response from server when creating university.");
-          return;
-        }
-
-        const { error: profError } = await supabase
-          .from("profiles")
-          .update({ role: "admin", university_id: universityId })
-          .eq("id", user.id);
-
-        if (profError) {
-          // If profile update fails due to RLS, optionally roll back university creation.
-          alert("Failed to update profile: " + (profError.message || profError));
-          return;
-        }
-
-        alert("You are now Admin.");
-        location.reload();
-      }
-    );
-  });
-
-  leaveUniBtn?.addEventListener("click", async () => {
-    await supabase
-      .from("profiles")
-      .update({ university_id: null })
-      .eq("id", user.id);
-
-    location.reload();
-  });
-}
-
-function openModal(title, description, onConfirm) {
-  const overlay = document.getElementById("modalOverlay");
-  const titleEl = document.getElementById("modalTitle");
-  const descEl = document.getElementById("modalDescription");
-  const confirmBtn = document.getElementById("modalConfirmBtn");
-  const cancelBtn = document.getElementById("modalCancelBtn");
-
-  titleEl.innerText = title;
-  descEl.innerText = description;
-
-  overlay.classList.remove("hidden");
-
-  confirmBtn.onclick = async () => {
-    await onConfirm();
-    overlay.classList.add("hidden");
-  };
-
-  cancelBtn.onclick = () => {
-    overlay.classList.add("hidden");
-  };
+  }
 }
