@@ -340,22 +340,43 @@ function attachEvents(profile, user, container) {
       "This will create a University entity and assign you as Admin.",
       async () => {
 
-        // Create university (must be authenticated; RLS may block anon)
-        const { data: university, error: uniError } = await supabase
+        // Create or reuse university (handle unique constraint if it already exists)
+        const uniName = user.email + "'s University";
+        let university = null;
+
+        const { data: created, error: createErr } = await supabase
           .from("universities")
-          .insert([{ name: user.email + "'s University" }])
+          .insert([{ name: uniName }])
           .select()
           .single();
 
-        if (uniError) {
-          // Handle common RLS / permission failure
-          if (uniError.status === 403 || /permission denied/i.test(uniError.message || '')) {
+        if (createErr) {
+          // Permission denied (RLS)
+          if (createErr.status === 403 || /permission denied/i.test(createErr.message || '')) {
             alert("Permission denied creating university. Ensure you're signed in and your account is allowed to create a university.");
             return;
           }
 
-          alert("Failed to create university: " + (uniError.message || uniError));
-          return;
+          // Duplicate name -> fetch existing university row
+          if (/duplicate key value|already exists/i.test(createErr.message || '')) {
+            const { data: existing, error: fetchErr } = await supabase
+              .from('universities')
+              .select('*')
+              .eq('name', uniName)
+              .maybeSingle();
+
+            if (fetchErr || !existing) {
+              alert('Failed to locate existing university after duplicate key: ' + (fetchErr?.message || fetchErr));
+              return;
+            }
+
+            university = existing;
+          } else {
+            alert('Failed to create university: ' + (createErr.message || createErr));
+            return;
+          }
+        } else {
+          university = created;
         }
 
         const universityId = university?.university_id;
