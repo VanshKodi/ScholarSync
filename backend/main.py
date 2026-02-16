@@ -17,6 +17,7 @@ app.add_middleware(
         "http://localhost:5500",
         "https://scholarsync-3s4e.onrender.com",
         "https://scholarsync.onrender.com",
+        "https://www.vanshkodi.in",
     ],
     allow_credentials=True,
     allow_methods=["*"],
