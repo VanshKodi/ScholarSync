@@ -56,10 +56,9 @@ async def become_admin(
 
     return {"message": "You are now admin"}
 
-@router.post("/apply-to-join-university/{university_id}/{message}")
+@router.post("/apply-to-join-university/{university_id}")
 async def apply_to_join_university(
     university_id: str,
-    message: str,
     authorization: str = Header(None)
 ):
     if not authorization:
@@ -75,7 +74,7 @@ async def apply_to_join_university(
 
     # 1️⃣ Create university join request
     join_resp = supabase.table("university_join_requests") \
-        .insert({"university_id": university_id, "requester_id": user_id, "message": message, "status": "pending"}) \
+        .insert({"university_id": university_id, "requester_id": user_id, "message": "", "status": "pending"}) \
         .execute()
 
     if not join_resp.data:
