@@ -114,6 +114,7 @@ async function renderProfileArea(container, user) {
     btn.textContent = 'Join University(Apply)';
     btn.onclick = () => joinUniversityFlow(user, container);
     adminArea.appendChild(btn);
+  }
 }
 
 async function joinUniversityFlow(user, container) {
