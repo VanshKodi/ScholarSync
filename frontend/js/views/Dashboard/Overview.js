@@ -169,3 +169,17 @@ async function becomeAdminFlow(user, container) {
   }
 
 }
+function disableButton(id, reason) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.disabled = true;
+  btn.title = reason;
+  btn.style.opacity = "0.6";
+  btn.style.cursor = "not-allowed";
+}
+
+function disableAllButtons(reason) {
+  ["becomeAdminBtn", "joinUniBtn", "viewRequestsBtn"].forEach(id => {
+    disableButton(id, reason);
+  });
+}
