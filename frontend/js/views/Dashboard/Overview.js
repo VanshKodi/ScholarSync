@@ -54,71 +54,80 @@ export async function Overview(container) {
 }
 
 async function renderProfileArea(container, user) {
-  // Minimal, easy-to-scan layout. Prefer backend actions for writes.
   container.innerHTML = `
     <div class="overview-wrapper" style="max-width:900px;margin:32px auto;font-family:Arial, sans-serif;">
       <h1>Profile</h1>
       <div id="profileInfo"></div>
-      <div id="adminArea" style="margin-top:18px;"></div>
+
+      <div style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;">
+        <button id="becomeAdminBtn">Become Admin</button>
+        <button id="joinUniBtn">Request To Join University</button>
+        <button id="viewRequestsBtn">View Join Requests</button>
+      </div>
+
+      <div id="adminArea" style="margin-top:20px;"></div>
     </div>
   `;
 
-  // Try to fetch profile from Supabase client (read). Backend can be used instead if you add an endpoint.
-  const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle();
+
   if (error) {
     document.getElementById('profileInfo').innerText = 'Failed to load profile.';
     return;
   }
 
   if (!profile) {
-    document.getElementById('profileInfo').innerHTML = `<p>No profile found. <button id="createProfileBtn">Create profile</button></p>`;
-    document.getElementById('createProfileBtn').onclick = async () => {
-      // Prefer backend-controlled creation. Fallback to client-side upsert.
-      try {
-        await apiFetch('/profiles/create', { method: 'POST', body: { id: user.id } });
-      } catch (err) {
-        // fallback
-        await supabase.from('profiles').upsert({ id: user.id, role: 'faculty', university_id: null, status: 'active' });
-      }
-      await renderProfileArea(container, user);
-    };
+    document.getElementById('profileInfo').innerHTML =
+      `<p>No profile found. Please create one first.</p>`;
+    disableAllButtons("Create profile first");
     return;
   }
 
-  // render compact profile
   const escapeHtml = (str) => {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   };
-  const info = `
+
+  document.getElementById('profileInfo').innerHTML = `
     <p><b>Email:</b> ${escapeHtml(user.email)}</p>
-    <p><b>Profile ID:</b> ${escapeHtml(profile.id)}</p>
     <p><b>Role:</b> ${escapeHtml(profile.role)}</p>
-    <p><b>University ID:</b> ${escapeHtml(profile.university_id ?? 'Not Assigned')}</p>
+    <p><b>University ID:</b> ${escapeHtml(profile.university_id ?? 'None')}</p>
     <p><b>Status:</b> ${escapeHtml(profile.status)}</p>
   `;
-  document.getElementById('profileInfo').innerHTML = info;
 
-  const adminArea = document.getElementById('adminArea');
-  adminArea.innerHTML = '';
-  if (profile.university_id === null) {
-    const btn = document.createElement('button');
-    btn.textContent = 'Become Admin (create university)';
-    btn.onclick = () => becomeAdminFlow(user, container);
-    adminArea.appendChild(btn);
-  } else if (profile.role === 'admin') {
-    await renderAdminRequests(adminArea, profile.university_id);
+  // Attach handlers
+  document.getElementById('becomeAdminBtn').onclick = () =>
+    becomeAdminFlow(user, container);
+
+  document.getElementById('joinUniBtn').onclick = () =>
+    joinUniversityFlow(user, container);
+
+  document.getElementById('viewRequestsBtn').onclick = async () => {
+    if (!profile.university_id) {
+      alert("You are not assigned to any university.");
+      return;
+    }
+    await renderAdminRequests(document.getElementById('adminArea'), profile.university_id);
+  };
+
+  // Disable logic (UI-level safety)
+  if (profile.university_id !== null) {
+    disableButton('becomeAdminBtn', "Already assigned to university");
   }
-  if(profile.role === 'faculty') {
-    const btn = document.createElement('button');
-    btn.textContent = 'Request to join another university';
-    btn.onclick = () => joinUniversityFlow(user, container);
-    adminArea.appendChild(btn);
+
+  if (profile.role !== 'faculty') {
+    disableButton('joinUniBtn', "Only faculty can request to join");
   }
-  
+
+  if (profile.role !== 'admin') {
+    disableButton('viewRequestsBtn', "Only admins can view requests");
+  }
 }
-
 async function renderAdminRequests(adminArea, universityId) {
   // Placeholder for admin requests rendering
 }
