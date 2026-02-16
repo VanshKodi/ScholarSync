@@ -1,3 +1,5 @@
+import { supabase } from "../utils/supabase.js";
+
 export function DocumentUpload() {
   const btn = document.createElement("button");
   btn.className = "upload-btn";
@@ -112,12 +114,33 @@ function openUploadPopup() {
       </div>
     `;
 
-    // BACKEND HOOK:
-    // fetch("/api/documents/check-duplicate")
-    fetch("http://127.0.0.1:8000/ping")
-      .then(res => res.json())
-      .then(data => console.log("Backend says:", data))
-      .catch(err => console.error(err));
+    // BACKEND HOOK: call production Render URL and send Supabase access token
+    const runCheck = async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      if (!token) {
+        console.error('no session token');
+        return;
+      }
+
+      try {
+        const res = await fetch('https://scholarsync-3s4e.onrender.com/ping', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const json = await res.json();
+        console.log('Backend says:', json);
+      } catch (err) {
+        console.error('backend error', err);
+      }
+    };
+
+    runCheck();
   };
 
   popup.querySelector(".cancel").onclick = () => overlay.remove();

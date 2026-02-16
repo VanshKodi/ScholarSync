@@ -282,9 +282,17 @@ async function loadAdminRequests(universityId) {
 
 async function handleRequestAction(requestId, action) {
   try {
-    const resp = await fetch('/handle-join-request', {
+    // get session token and call backend with Authorization header
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      alert('Not authenticated');
+      return;
+    }
+
+    const resp = await fetch('https://scholarsync-3s4e.onrender.com/handle-join-request', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ request_id: requestId, action })
     });
 

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel
 from config.supabase import supabase
+from config.auth import verify_supabase_token, SupabaseAuthError
+
+from typing import Optional
 
 router = APIRouter()
 
@@ -10,8 +13,27 @@ class HandleRequestBody(BaseModel):
     action: str  # 'accept' or 'reject'
 
 
+def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail='missing authorization header')
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != 'bearer':
+        raise HTTPException(status_code=401, detail='invalid authorization header')
+
+    token = parts[1]
+    try:
+        user = verify_supabase_token(token)
+    except SupabaseAuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    return user
+
+
 @router.post('/handle-join-request')
-async def handle_join_request(body: HandleRequestBody):
+async def handle_join_request(body: HandleRequestBody, user=Depends(get_current_user)):
+    # Authenticated endpoint: Supabase access token is validated via
+    # config.auth.verify_supabase_token which calls the Supabase auth API.
     # This endpoint uses the SERVICE_ROLE key (configured in config.supabase)
     # It performs an atomic operation: if action == 'accept', update the target
     # profile's university_id and set request status to 'accepted'.

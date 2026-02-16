@@ -11,7 +11,13 @@ from config.gemini import client
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5500","http://localhost:5500"],  # frontend port
+    # Allow local dev and production frontend on Render
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "https://scholarsync-3s4e.onrender.com",
+        "https://scholarsync.onrender.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
