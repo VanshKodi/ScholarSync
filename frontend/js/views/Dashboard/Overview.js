@@ -86,24 +86,23 @@ async function renderProfileArea(container, user) {
   }
 
   // render compact profile
+  const escapeHtml = (str) => {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  };
   const info = `
-    <p><b>Email:</b> ${user.email}</p>
-    <p><b>Profile ID:</b> ${profile.id}</p>
-    <p><b>Role:</b> ${profile.role}</p>
-    <p><b>University ID:</b> ${profile.university_id ?? 'Not Assigned'}</p>
-    <p><b>Status:</b> ${profile.status}</p>
+    <p><b>Email:</b> ${escapeHtml(user.email)}</p>
+    <p><b>Profile ID:</b> ${escapeHtml(profile.id)}</p>
+    <p><b>Role:</b> ${escapeHtml(profile.role)}</p>
+    <p><b>University ID:</b> ${escapeHtml(profile.university_id ?? 'Not Assigned')}</p>
+    <p><b>Status:</b> ${escapeHtml(profile.status)}</p>
   `;
   document.getElementById('profileInfo').innerHTML = info;
 
   const adminArea = document.getElementById('adminArea');
   adminArea.innerHTML = '';
-
-  if (profile.role === 'admin' && profile.university_id) {
-    const btn = document.createElement('button');
-    btn.textContent = 'Manage Join Requests';
-    btn.onclick = () => renderAdminRequests(adminArea, profile.university_id);
-    adminArea.appendChild(btn);
-  } else if (profile.university_id === null) {
+  if (profile.university_id === null) {
     const btn = document.createElement('button');
     btn.textContent = 'Become Admin (create university)';
     btn.onclick = () => becomeAdminFlow(user, container);
@@ -167,30 +166,20 @@ async function handleRequestAction(requestId, action) {
 }
 
 async function becomeAdminFlow(user, container) {
-  if (!confirm('Create a University and become its admin?')) return;
-  const uniName = user.email + "'s University";
+  const uniName = prompt("Enter university name:");
+  if (!uniName) return;
 
   try {
-    // Prefer backend creation which will perform all writes server-side (ignoring RLS)
-    const json = await apiFetch('/admin/create-university', { method: 'POST', body: { name: uniName } });
-    const universityId = json?.university?.university_id;
-    if (!universityId) throw new Error('invalid response');
+    const encodedName = encodeURIComponent(uniName);
 
-    // ask backend to attach profile to university
-    await apiFetch('/admin/assign-admin', { method: 'POST', body: { user_id: user.id, university_id: universityId } });
+    await apiFetch(`/become-admin/${encodedName}`, {
+      method: 'POST'
+    });
+
     alert('You are now Admin');
     await renderProfileArea(container, user);
+
   } catch (err) {
-    // fallback to client-side behavior if backend not present
-    try {
-      const { data: created, error: createErr } = await supabase.from('universities').insert([{ name: uniName }]).select().single();
-      if (createErr) throw createErr;
-      const universityId = created.university_id;
-      await supabase.from('profiles').update({ role: 'admin', university_id: universityId }).eq('id', user.id);
-      alert('You are now Admin');
-      await renderProfileArea(container, user);
-    } catch (e) {
-      alert('Failed to become admin: ' + (e.message || e));
-    }
+    alert('Failed to become admin: ' + (err.message || err));
   }
 }
