@@ -109,7 +109,8 @@ async function renderProfileArea(container, user) {
     adminArea.appendChild(btn);
   } else if (profile.role === 'admin') {
     await renderAdminRequests(adminArea, profile.university_id);
-  }else if(profile.role === 'faculty') {
+  }
+  if(profile.role === 'faculty') {
     const btn = document.createElement('button');
     btn.textContent = 'Request to join another university';
     btn.onclick = () => joinUniversityFlow(user, container);
