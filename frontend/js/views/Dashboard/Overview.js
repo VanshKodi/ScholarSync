@@ -107,62 +107,31 @@ async function renderProfileArea(container, user) {
     btn.textContent = 'Become Admin (create university)';
     btn.onclick = () => becomeAdminFlow(user, container);
     adminArea.appendChild(btn);
-  }
+  }else if (profile.role === 'admin') {
+    await renderAdminRequests(adminArea, profile.university_id);
+  }else if (profile.role !== 'admin') {
+    const btn = document.createElement('button');
+    btn.textContent = 'Join University(Apply)';
+    btn.onclick = () => joinUniversityFlow(user, container);
+    adminArea.appendChild(btn);
 }
 
-async function renderAdminRequests(container, universityId) {
-  container.innerHTML = '<h3>Pending Requests</h3><div id="requestsList">Loading...</div>';
-  const listEl = document.getElementById('requestsList');
-
-  // Prefer backend endpoint; fallback to direct Supabase read if backend not available
+async function joinUniversityFlow(user, container) {
+  const uniId = prompt("Enter university id to join:");
+  if (!uniId) return;
   try {
-    const json = await apiFetch(`/admin/join-requests?university_id=${encodeURIComponent(universityId)}`);
-    const rows = json?.data ?? [];
-    if (!rows.length) return (listEl.innerText = 'No pending requests.');
+    const encodedId = encodeURIComponent(uniId);
 
-    listEl.innerHTML = rows.map(r => renderRequestItemHtml(r)).join('');
-    attachRequestButtons(listEl, universityId);
+    await apiFetch(`/apply-to-join-university/${encodedId}`, {
+      method: 'POST'
+    });
+
+    alert('Join request sent');
+    await renderProfileArea(container, user);
+
   } catch (err) {
-    // fallback to supabase client
-    const { data, error } = await supabase.from('university_join_requests').select('*').eq('university_id', universityId).eq('status', 'pending');
-    if (error) return (listEl.innerText = 'Failed to load requests');
-    if (!data || !data.length) return (listEl.innerText = 'No pending requests.');
-    listEl.innerHTML = data.map(r => renderRequestItemHtml(r)).join('');
-    attachRequestButtons(listEl, universityId);
+    alert('Failed to send join request: ' + (err.message || err));
   }
-}
-
-function renderRequestItemHtml(r) {
-  return `
-    <div class="request-item" data-id="${r.request_id}" style="border:1px solid #ddd;padding:8px;margin:8px 0;">
-      <div><b>Requester:</b> ${r.requester_id}</div>
-      <div><b>Message:</b> ${r.message ?? ''}</div>
-      <div style="margin-top:8px;">
-        <button data-action="accept" class="acceptBtn">Accept</button>
-        <button data-action="reject" class="rejectBtn">Reject</button>
-      </div>
-    </div>
-  `;
-}
-
-function attachRequestButtons(listEl, universityId) {
-  listEl.querySelectorAll('.acceptBtn, .rejectBtn').forEach(btn => btn.addEventListener('click', async (e) => {
-    const id = e.target.closest('.request-item').dataset.id;
-    const action = e.target.dataset.action;
-    try {
-      await handleRequestAction(id, action);
-      // reload
-      await renderAdminRequests(document.getElementById('adminArea'), universityId);
-    } catch (err) {
-      alert('Error: ' + (err.message || err));
-    }
-  }));
-}
-
-async function handleRequestAction(requestId, action) {
-  // Backend-managed action; endpoint already added: POST /handle-join-request
-  await apiFetch('/handle-join-request', { method: 'POST', body: { request_id: requestId, action } });
-  alert('Request ' + action + 'ed');
 }
 
 async function becomeAdminFlow(user, container) {
@@ -182,4 +151,5 @@ async function becomeAdminFlow(user, container) {
   } catch (err) {
     alert('Failed to become admin: ' + (err.message || err));
   }
+
 }

@@ -55,3 +55,29 @@ async def become_admin(
         .execute()
 
     return {"message": "You are now admin"}
+
+@router.post("/apply-to-join-university/{university_id}/{message}")
+async def apply_to_join_university(
+    university_id: str,
+    message: str,
+    authorization: str = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing auth header")
+
+    token = authorization.split(" ")[1]
+
+    user = supabase.auth.get_user(token)
+    if not user.user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user_id = user.user.id
+
+    # 1️⃣ Create university join request
+    join_resp = supabase.table("university_join_requests") \
+        .insert({"university_id": university_id, "requester_id": user_id, "message": message, "status": "pending"}) \
+        .execute()
+
+    if not join_resp.data:
+        raise HTTPException(status_code=400, detail="Failed to create university request")
+    return {"message": "Join request sent successfully"}
