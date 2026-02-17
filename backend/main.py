@@ -7,16 +7,17 @@ from fastapi.middleware.cors import CORSMiddleware
 # To be used oterwhere
 from config.supabase import supabase
 from config.gemini import client
-#
+# uvicorn main:app --reload
+# cloudflared tunnel run scholarsync-backend
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     # Allow local dev and production frontend on Render
     allow_origins=[
         "http://127.0.0.1:5500",
+        "http://127.0.0.1:8000",
         "http://localhost:5500",
-        "https://scholarsync-3s4e.onrender.com",
-        "https://scholarsync.onrender.com",
+        "api.vanshkodi.in",
         "https://www.vanshkodi.in",
     ],
     allow_credentials=True,
