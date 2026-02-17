@@ -1,41 +1,42 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Depends
 from config.supabase import supabase
 
 router = APIRouter()
 
+
+def get_current_user_id(authorization: str = Header(None)) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing auth header")
+
+    try:
+        token = authorization.split(" ")[1]
+    except IndexError:
+        raise HTTPException(status_code=401, detail="Invalid auth format")
+
+    user = supabase.auth.get_user(token)
+
+    if not user.user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return user.user.id
+
+
 @router.get("/test-supabase")
 async def test_supabase():
     try:
-        # This will hit Supabase auth endpoint
-        response = supabase.auth.get_session()
-
-        return {
-            "status": "Supabase connected successfully"
-        }
-
+        supabase.auth.get_session()
+        return {"status": "Supabase connected successfully"}
     except Exception as e:
-        return {
-            "status": "Error",
-            "detail": str(e)
-        }
+        return {"status": "Error", "detail": str(e)}
+
+
 
 @router.post("/become-admin/{university_name}")
 async def become_admin(
     university_name: str,
-    authorization: str = Header(None)
+    user_id: str = Depends(get_current_user_id)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing auth header")
-
-    token = authorization.split(" ")[1]
-
-    user = supabase.auth.get_user(token)
-    if not user.user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    user_id = user.user.id
-
-    # 1️⃣ Create university
+    # Create university
     uni_resp = supabase.table("universities") \
         .insert({"name": university_name}) \
         .execute()
@@ -45,7 +46,7 @@ async def become_admin(
 
     university_id = uni_resp.data[0]["university_id"]
 
-    # 2️⃣ Update profile
+    # Update profile
     supabase.table("profiles") \
         .update({
             "role": "admin",
@@ -56,56 +57,66 @@ async def become_admin(
 
     return {"message": "You are now admin"}
 
+
+
 @router.post("/apply-to-join-university/{university_id}")
 async def apply_to_join_university(
     university_id: str,
-    authorization: str = Header(None)
+    user_id: str = Depends(get_current_user_id)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing auth header")
-
-    token = authorization.split(" ")[1]
-
-    user = supabase.auth.get_user(token)
-    if not user.user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    user_id = user.user.id
-
-    # 1️⃣ Create university join request
     join_resp = supabase.table("university_join_requests") \
-        .insert({"university_id": university_id, "requester_id": user_id, "message": "", "status": "pending"}) \
+        .insert({
+            "university_id": university_id,
+            "requester_id": user_id,
+            "message": "",
+            "status": "pending"
+        }) \
         .execute()
 
     if not join_resp.data:
         raise HTTPException(status_code=400, detail="Failed to create university request")
+
     return {"message": "Join request sent successfully"}
+
 
 @router.post("/become-faculty")
 async def become_faculty(
-    authorization: str = Header(None)
+    user_id: str = Depends(get_current_user_id)
 ):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing auth header")
+    # Get current profile
+    profile_resp = supabase.table("profiles") \
+        .select("role, university_id") \
+        .eq("id", user_id) \
+        .single() \
+        .execute()
 
-    token = authorization.split(" ")[1]
+    if not profile_resp.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
 
-    user = supabase.auth.get_user(token)
-    if not user.user:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    profile = profile_resp.data
 
-    user_id = user.user.id
+    # If admin, delete their university
+    if profile["role"] == "admin" and profile["university_id"]:
+        university_id = profile["university_id"]
 
-    # Update profile
-    resp = supabase.table("profiles") \
+        # Clear references first (safe if no ON DELETE SET NULL)
+        supabase.table("profiles") \
+            .update({"university_id": None}) \
+            .eq("university_id", university_id) \
+            .execute()
+
+        supabase.table("universities") \
+            .delete() \
+            .eq("university_id", university_id) \
+            .execute()
+
+    # Update user role
+    supabase.table("profiles") \
         .update({
             "role": "faculty",
             "university_id": None
         }) \
         .eq("id", user_id) \
         .execute()
-
-    if not resp.data:
-        raise HTTPException(status_code=400, detail="Failed to update profile")
 
     return {"message": "You are now faculty"}
