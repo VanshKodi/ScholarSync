@@ -1,5 +1,5 @@
 import { supabase } from "../../utils/supabase.js";
-
+console.log("Overview file loaded");
 const API_BASE = "https://api.vanshkodi.in";
 
 /* ======================
@@ -34,6 +34,8 @@ async function apiFetch(path, options = {}) {
 ====================== */
 
 export async function Overview(container) {
+    console.log("Overview called");
+
   const { data } = await supabase.auth.getSession();
   const user = data?.session?.user;
 
