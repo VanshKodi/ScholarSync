@@ -1,6 +1,6 @@
 import { supabase } from "../../utils/supabase.js";
 
-API_BASE = window.__ENV__.API_BASE_URL;
+const API_BASE = window.__ENV__.API_BASE_URL;
 
 async function waitForUser(timeout = 5000) {
   const { data: sessionData } = await supabase.auth.getSession();
