@@ -120,3 +120,103 @@ async def become_faculty(
         .execute()
 
     return {"message": "You are now faculty"}
+
+@router.get("/university-join-requests/{university_id}")
+async def get_university_join_requests(
+    university_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    # Ensure requester is admin of that university
+    profile = supabase.table("profiles") \
+        .select("role, university_id") \
+        .eq("id", user_id) \
+        .single() \
+        .execute()
+
+    if not profile.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    if profile.data["role"] != "admin" or profile.data["university_id"] != university_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    resp = supabase.table("university_join_requests") \
+        .select("*") \
+        .eq("university_id", university_id) \
+        .order("request_id", desc=True) \
+        .execute()
+
+    return resp.data or []
+
+@router.post("/approve-join-request/{request_id}")
+async def approve_join_request(
+    request_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    # Get request
+    req = supabase.table("university_join_requests") \
+        .select("*") \
+        .eq("request_id", request_id) \
+        .single() \
+        .execute()
+
+    if not req.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    university_id = req.data["university_id"]
+    requester_id = req.data["requester_id"]
+
+    # Verify admin
+    profile = supabase.table("profiles") \
+        .select("role, university_id") \
+        .eq("id", user_id) \
+        .single() \
+        .execute()
+
+    if profile.data["role"] != "admin" or profile.data["university_id"] != university_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Update requester profile
+    supabase.table("profiles") \
+        .update({"university_id": university_id}) \
+        .eq("id", requester_id) \
+        .execute()
+
+    # Mark request approved
+    supabase.table("university_join_requests") \
+        .update({"status": "approved"}) \
+        .eq("request_id", request_id) \
+        .execute()
+
+    return {"message": "Request approved"}
+
+@router.post("/reject-join-request/{request_id}")
+async def reject_join_request(
+    request_id: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    req = supabase.table("university_join_requests") \
+        .select("*") \
+        .eq("request_id", request_id) \
+        .single() \
+        .execute()
+
+    if not req.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    university_id = req.data["university_id"]
+
+    profile = supabase.table("profiles") \
+        .select("role, university_id") \
+        .eq("id", user_id) \
+        .single() \
+        .execute()
+
+    if profile.data["role"] != "admin" or profile.data["university_id"] != university_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    supabase.table("university_join_requests") \
+        .update({"status": "rejected"}) \
+        .eq("request_id", request_id) \
+        .execute()
+
+    return {"message": "Request rejected"}

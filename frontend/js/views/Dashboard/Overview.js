@@ -3,13 +3,8 @@ import { supabase } from "../../utils/supabase.js";
 const API_BASE = "https://api.vanshkodi.in";
 
 /* ======================
-   Helpers
+   API Helper
 ====================== */
-
-async function getUser() {
-  const { data } = await supabase.auth.getSession();
-  return data?.session?.user || null;
-}
 
 async function apiFetch(path, options = {}) {
   const { data } = await supabase.auth.getSession();
@@ -19,10 +14,10 @@ async function apiFetch(path, options = {}) {
     ...options,
     headers: {
       ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.body && !(options.body instanceof FormData)
-        ? { "Content-Type": "application/json" }
-        : {})
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(options.body && !(options.body instanceof FormData) && {
+        "Content-Type": "application/json"
+      })
     },
     body:
       options.body && !(options.body instanceof FormData)
@@ -39,8 +34,14 @@ async function apiFetch(path, options = {}) {
 ====================== */
 
 export async function Overview(container) {
-  const user = await getUser();
-  if (!user) return (container.innerHTML = "<p>Not authenticated</p>");
+  const { data } = await supabase.auth.getSession();
+  const user = data?.session?.user;
+
+  if (!user) {
+    container.innerHTML = "<p>Not authenticated</p>";
+    return;
+  }
+
   renderProfile(container, user);
 }
 
@@ -68,53 +69,118 @@ async function renderProfile(container, user) {
         <button id="adminBtn">Become Admin</button>
         <button id="joinBtn">Join University</button>
         <button id="facultyBtn">Become Faculty</button>
+        <button id="viewBtn">View Join Requests</button>
       </div>
+
+      <div id="joinReqsContainer" style="margin-top:20px;"></div>
     </div>
   `;
 
-  document.getElementById("adminBtn").onclick = () =>
-    handleAdmin(user, container);
+  /* ===== Buttons ===== */
 
-  document.getElementById("joinBtn").onclick = () =>
-    handleJoin(user, container);
+  document.getElementById("adminBtn").onclick = async () => {
+    const name = prompt("University name:");
+    if (!name) return;
 
-  document.getElementById("facultyBtn").onclick = () =>
-    handleFaculty(user, container);
+    await apiFetch(`/become-admin/${encodeURIComponent(name)}`, {
+      method: "POST"
+    });
+
+    alert("You are now Admin");
+    renderProfile(container, user);
+  };
+
+  document.getElementById("joinBtn").onclick = async () => {
+    const id = prompt("University ID:");
+    if (!id) return;
+
+    await apiFetch(`/apply-to-join-university/${encodeURIComponent(id)}`, {
+      method: "POST"
+    });
+
+    alert("Join request sent");
+    renderProfile(container, user);
+  };
+
+  document.getElementById("facultyBtn").onclick = async () => {
+    if (prompt("Enter 123159 to confirm") !== "123159") return;
+
+    await apiFetch("/become-faculty", { method: "POST" });
+
+    alert("You are now Faculty");
+    renderProfile(container, user);
+  };
+
+  document.getElementById("viewBtn").onclick = async () => {
+    if (!profile.university_id) {
+      alert("You are not assigned to any university.");
+      return;
+    }
+
+    await renderJoinRequests(profile.university_id);
+  };
 }
 
 /* ======================
-   Actions
+   Join Requests Viewer
 ====================== */
 
-async function handleAdmin(user, container) {
-  const name = prompt("University name:");
-  if (!name) return;
+async function renderJoinRequests(universityId) {
+  const container = document.getElementById("joinReqsContainer");
+  container.innerHTML = "Loading...";
 
-  await apiFetch(`/become-admin/${encodeURIComponent(name)}`, {
-    method: "POST"
-  });
+  try {
+    const requests = await apiFetch(
+      `/university-join-requests/${encodeURIComponent(universityId)}`
+    );
 
-  alert("You are now Admin");
-  renderProfile(container, user);
-}
+    if (!requests.length) {
+      container.innerHTML = "<p>No join requests.</p>";
+      return;
+    }
 
-async function handleJoin(user, container) {
-  const id = prompt("University ID:");
-  if (!id) return;
+    container.innerHTML = requests
+      .map(
+        (r) => `
+        <div style="border:1px solid #ccc;padding:10px;margin-bottom:10px;">
+          <p><b>Requester:</b> ${r.requester_id}</p>
+          <p><b>Status:</b> ${r.status}</p>
 
-  await apiFetch(`/apply-to-join-university/${encodeURIComponent(id)}`, {
-    method: "POST"
-  });
+          ${
+            r.status === "pending"
+              ? `
+                <button data-id="${r.request_id}" class="approveBtn">Approve</button>
+                <button data-id="${r.request_id}" class="rejectBtn">Reject</button>
+              `
+              : ""
+          }
+        </div>
+      `
+      )
+      .join("");
 
-  alert("Join request sent");
-  renderProfile(container, user);
-}
+    /* ===== Approve ===== */
+    document.querySelectorAll(".approveBtn").forEach((btn) => {
+      btn.onclick = async () => {
+        await apiFetch(`/approve-join-request/${btn.dataset.id}`, {
+          method: "POST"
+        });
+        renderJoinRequests(universityId);
+      };
+    });
 
-async function handleFaculty(user, container) {
-  if (prompt("Enter 123159 to confirm") !== "123159") return;
+    /* ===== Reject ===== */
+    document.querySelectorAll(".rejectBtn").forEach((btn) => {
+      btn.onclick = async () => {
+        await apiFetch(`/reject-join-request/${btn.dataset.id}`, {
+          method: "POST"
+        });
+        renderJoinRequests(universityId);
+      };
+    });
 
-  await apiFetch("/become-faculty", { method: "POST" });
-
-  alert("You are now Faculty");
-  renderProfile(container, user);
+  } catch (err) {
+    container.innerHTML =
+      "<p style='color:red;'>Failed to load join requests.</p>";
+  }
 }
