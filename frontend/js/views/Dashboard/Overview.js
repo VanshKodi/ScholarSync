@@ -63,6 +63,7 @@ async function renderProfileArea(container, user) {
         <button id="becomeAdminBtn">Become Admin</button>
         <button id="joinUniBtn">Request To Join University</button>
         <button id="viewRequestsBtn">View Join Requests</button>
+        <button id="becomeFacultyBtn">Become Faculty</button>
       </div>
 
       <div id="adminArea" style="margin-top:20px;"></div>
@@ -114,6 +115,8 @@ async function renderProfileArea(container, user) {
     }
     await renderAdminRequests(document.getElementById('adminArea'), profile.university_id);
   };
+  document.getElementById('becomeFacultyBtn').onclick = () =>
+    becomeFacultyFlow(user, container);
 
   // Disable logic (UI-level safety)
   if (profile.university_id !== null) {
@@ -168,6 +171,21 @@ async function becomeAdminFlow(user, container) {
     alert('Failed to become admin: ' + (err.message || err));
   }
 
+}
+async function becomeFacultyFlow(user, container) {
+  const promptResp = prompt("Doing this will reset your profile data, only local documents will be retained.Are you sure? IF YES ENTER 123159");
+  if (!promptResp || promptResp !== "123159") return;
+  try {
+    await apiFetch(`/become-faculty`, {
+      method: 'POST'
+    });
+
+    alert('You are now Faculty');
+    await renderProfileArea(container, user);
+
+  } catch (err) {
+    alert('Failed to become faculty: ' + (err.message || err));
+  }
 }
 function disableButton(id, reason) {
   const btn = document.getElementById(id);
