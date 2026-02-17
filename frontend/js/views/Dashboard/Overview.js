@@ -52,18 +52,10 @@ async function renderProfile(container, user) {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile) {
-    container.innerHTML = "<p>No profile found.</p>";
-    return;
-  }
-
   container.innerHTML = `
     <div style="max-width:900px;margin:32px auto;">
       <h1>Profile</h1>
-      <p><b>Email:</b> ${user.email}</p>
-      <p><b>Role:</b> ${profile.role}</p>
-      <p><b>University ID:</b> ${profile.university_id ?? "None"}</p>
-      <p><b>Status:</b> ${profile.status}</p>
+      <div id="profileInfo"></div>
 
       <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
         <button id="adminBtn">Become Admin</button>
@@ -76,51 +68,48 @@ async function renderProfile(container, user) {
     </div>
   `;
 
-  /* ===== Buttons ===== */
+  const profileInfo = document.getElementById("profileInfo");
 
+  if (!profile) {
+    profileInfo.innerHTML = "<p>No profile found.</p>";
+  } else {
+    profileInfo.innerHTML = `
+      <p><b>Email:</b> ${user.email}</p>
+      <p><b>Role:</b> ${profile.role}</p>
+      <p><b>University ID:</b> ${profile.university_id ?? "None"}</p>
+      <p><b>Status:</b> ${profile.status}</p>
+    `;
+  }
+
+  // Buttons always attach
   document.getElementById("adminBtn").onclick = async () => {
     const name = prompt("University name:");
     if (!name) return;
-
-    await apiFetch(`/become-admin/${encodeURIComponent(name)}`, {
-      method: "POST"
-    });
-
-    alert("You are now Admin");
+    await apiFetch(`/become-admin/${encodeURIComponent(name)}`, { method: "POST" });
     renderProfile(container, user);
   };
 
   document.getElementById("joinBtn").onclick = async () => {
     const id = prompt("University ID:");
     if (!id) return;
-
-    await apiFetch(`/apply-to-join-university/${encodeURIComponent(id)}`, {
-      method: "POST"
-    });
-
-    alert("Join request sent");
+    await apiFetch(`/apply-to-join-university/${encodeURIComponent(id)}`, { method: "POST" });
     renderProfile(container, user);
   };
 
   document.getElementById("facultyBtn").onclick = async () => {
     if (prompt("Enter 123159 to confirm") !== "123159") return;
-
     await apiFetch("/become-faculty", { method: "POST" });
-
-    alert("You are now Faculty");
     renderProfile(container, user);
   };
 
   document.getElementById("viewBtn").onclick = async () => {
-    if (!profile.university_id) {
+    if (!profile?.university_id) {
       alert("You are not assigned to any university.");
       return;
     }
-
-    await renderJoinRequests(profile.university_id);
+    renderJoinRequests(profile.university_id);
   };
 }
-
 /* ======================
    Join Requests Viewer
 ====================== */
