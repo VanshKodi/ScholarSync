@@ -1,6 +1,5 @@
 // js/scripts/supabase.js
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {ENV} from "../1.config.js";
 const { SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } = ENV;
 
 export const supabase = window.supabase.createClient(
