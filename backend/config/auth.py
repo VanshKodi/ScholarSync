@@ -2,6 +2,8 @@ import os
 import requests
 from dotenv import load_dotenv
 
+from typing import Optional
+
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -43,3 +45,24 @@ def verify_supabase_token(token: str) -> dict:
         raise SupabaseAuthError("failed reading supabase response") from e
 
     return data
+
+
+# FastAPI dependency helper to reuse across routes
+from fastapi import Header, HTTPException
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="missing authorization header")
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="invalid authorization header")
+
+    token = parts[1]
+    try:
+        user = verify_supabase_token(token)
+    except SupabaseAuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    return user

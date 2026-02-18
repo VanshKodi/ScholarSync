@@ -1,59 +1,41 @@
 import { supabase } from "../../utils/supabase.js";
+import { Session, request } from "../../api.js";
+
 console.log("Overview file loaded");
-const API_BASE = "https://api.vanshkodi.in";
-
-/* ======================
-   API Helper
-====================== */
-
-async function apiFetch(path, options = {}) {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-
-  const res = await fetch(API_BASE + path, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...(options.body && !(options.body instanceof FormData) && {
-        "Content-Type": "application/json"
-      })
-    },
-    body:
-      options.body && !(options.body instanceof FormData)
-        ? JSON.stringify(options.body)
-        : options.body
-  });
-
-  if (!res.ok) throw new Error(await res.text());
-  return res.json().catch(() => ({}));
-}
 
 /* ======================
    Main
 ====================== */
 
 export async function Overview(container) {
-    console.log("Overview called");
+  console.log("Overview called");
 
-  const { data } = await supabase.auth.getSession();
-  const user = data?.session?.user;
+  const session = await Session.get();
+  const user = session?.user;
 
   if (!user) {
     container.innerHTML = "<p>Not authenticated</p>";
     return;
   }
 
-  renderProfile(container, user);
-}
-
-async function renderProfile(container, user) {
+  // Load profile data once and render
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
+  renderProfile(container, user, profile);
+
+  attachHandlers(container, user, profile);
+}
+
+/* ======================
+   Rendering (pure)
+   renderProfile does only UI rendering
+====================== */
+
+export function renderProfile(container, user, profile) {
   container.innerHTML = `
     <div style="max-width:900px;margin:32px auto;">
       <h1>Profile</h1>
@@ -82,35 +64,44 @@ async function renderProfile(container, user) {
       <p><b>Status:</b> ${profile.status}</p>
     `;
   }
+}
 
-  // Buttons always attach
-  document.getElementById("adminBtn").onclick = async () => {
+/* ======================
+   Event handlers (no nested inline handlers)
+====================== */
+
+function attachHandlers(container, user, profile) {
+  document.getElementById("adminBtn").addEventListener("click", async () => {
     const name = prompt("University name:");
     if (!name) return;
-    await apiFetch(`/become-admin/${encodeURIComponent(name)}`, { method: "POST" });
-    renderProfile(container, user);
-  };
+    await request(`/become-admin/${encodeURIComponent(name)}`, { method: "POST" });
+    // reload small part
+    const { data: refreshed } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    renderProfile(container, user, refreshed);
+  });
 
-  document.getElementById("joinBtn").onclick = async () => {
+  document.getElementById("joinBtn").addEventListener("click", async () => {
     const id = prompt("University ID:");
     if (!id) return;
-    await apiFetch(`/apply-to-join-university/${encodeURIComponent(id)}`, { method: "POST" });
-    renderProfile(container, user);
-  };
+    await request(`/apply-to-join-university/${encodeURIComponent(id)}`, { method: "POST" });
+    const { data: refreshed } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    renderProfile(container, user, refreshed);
+  });
 
-  document.getElementById("facultyBtn").onclick = async () => {
+  document.getElementById("facultyBtn").addEventListener("click", async () => {
     if (prompt("Enter 123159 to confirm") !== "123159") return;
-    await apiFetch("/become-faculty", { method: "POST" });
-    renderProfile(container, user);
-  };
+    await request("/become-faculty", { method: "POST" });
+    const { data: refreshed } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+    renderProfile(container, user, refreshed);
+  });
 
-  document.getElementById("viewBtn").onclick = async () => {
+  document.getElementById("viewBtn").addEventListener("click", () => {
     if (!profile?.university_id) {
       alert("You are not assigned to any university.");
       return;
     }
     renderJoinRequests(profile.university_id);
-  };
+  });
 }
 /* ======================
    Join Requests Viewer
@@ -121,7 +112,7 @@ async function renderJoinRequests(universityId) {
   container.innerHTML = "Loading...";
 
   try {
-    const requests = await apiFetch(
+    const requests = await request(
       `/university-join-requests/${encodeURIComponent(universityId)}`
     );
 
@@ -150,24 +141,20 @@ async function renderJoinRequests(universityId) {
       )
       .join("");
 
-    /* ===== Approve ===== */
-    document.querySelectorAll(".approveBtn").forEach((btn) => {
-      btn.onclick = async () => {
-        await apiFetch(`/approve-join-request/${btn.dataset.id}`, {
-          method: "POST"
-        });
+    // event delegation for approve/reject
+    container.querySelectorAll('.approveBtn, .rejectBtn').forEach(b=>b.removeEventListener && b.removeEventListener());
+    container.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      const id = btn.dataset.id;
+      if (btn.classList.contains('approveBtn')) {
+        await request(`/approve-join-request/${id}`, { method: 'POST' });
         renderJoinRequests(universityId);
-      };
-    });
-
-    /* ===== Reject ===== */
-    document.querySelectorAll(".rejectBtn").forEach((btn) => {
-      btn.onclick = async () => {
-        await apiFetch(`/reject-join-request/${btn.dataset.id}`, {
-          method: "POST"
-        });
+      }
+      if (btn.classList.contains('rejectBtn')) {
+        await request(`/reject-join-request/${id}`, { method: 'POST' });
         renderJoinRequests(universityId);
-      };
+      }
     });
 
   } catch (err) {

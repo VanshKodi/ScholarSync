@@ -1,5 +1,6 @@
 // auth.js
 import { supabase } from "./supabase.js";
+import { Session } from "../api.js";
 
 /* ---------- AUTH ACTIONS ---------- */
 
@@ -23,23 +24,15 @@ export async function logout() {
 /* ---------- AUTH STATE ---------- */
 
 export async function isAuthenticated() {
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
+  const session = await Session.get();
   return !!session;
 }
 
 export function onAuthChange(callback) {
-  supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session);
-  });
+  Session.onChange(callback);
 }
 
 export async function getUser() {
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  return user;
+  const session = await Session.get();
+  return session?.user || null;
 }

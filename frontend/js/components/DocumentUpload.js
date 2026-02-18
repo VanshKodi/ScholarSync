@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase.js";
+import { Session } from "../api.js";
 
 export function DocumentUpload() {
   const btn = document.createElement("button");
@@ -116,8 +117,8 @@ function openUploadPopup() {
 
     // BACKEND HOOK: call production Render URL and send Supabase access token
     const runCheck = async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
+      const session = await Session.get();
+      const token = session?.access_token;
       if (!token) {
         console.error('no session token');
         return;

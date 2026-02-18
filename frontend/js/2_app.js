@@ -1,7 +1,7 @@
 import { startRouter } from "./3_router.js";
 import { showLoader, hideLoader } from "./components/Loader.js";
 import { supabase } from "./utils/supabase.js";
-import { isAuthenticated, onAuthChange } from "./utils/auth.js";
+import { Session } from "./api.js";
 
 const root = document.getElementById("root");
 
@@ -22,9 +22,9 @@ showLoader("Loading ScholarSync...");
     window.history.replaceState(null, "", "#/");
   }
 
-  // Check if user has an active session
-  const { data } = await supabase.auth.getSession();
-  const hasSession = !!data?.session;
+  // Check if user has an active session (uses centralized Session)
+  const session = await Session.get();
+  const hasSession = !!session;
 
   // Start router and redirect authenticated users to dashboard
   startRouter(root);
@@ -37,7 +37,7 @@ showLoader("Loading ScholarSync...");
 })();
 
 // React to auth state changes
-onAuthChange((session) => {
+Session.onChange((session) => {
   if (session) {
     window.location.hash = "#/dashboard";
   } else {
