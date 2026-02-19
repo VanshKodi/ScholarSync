@@ -6,11 +6,9 @@ import { DocumentUpload } from "../../components/DocumentUpload.js";
 // dashboard views (same folder)
 import { Overview } from "./Overview.js";
 import { Documents } from "./Documents.js";
-import { Profile } from "./Profile.js";
-import { Settings } from "./Settings.js";
 import { JoinRequests } from "./JoinRequests.js";
 
-import { supabase } from "../utils/supabase.js";
+import { supabase } from "../../utils/supabase.js";
 
 async function handleLogin() {
   const { data: { session } } = await supabase.auth.getSession();
