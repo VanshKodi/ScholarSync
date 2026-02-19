@@ -28,10 +28,9 @@ async def create_profile(user: dict = Depends(get_current_user)):
     """Create a profile for the current authenticated user"""
     profile = supabase.table("profiles").insert({
         "id": user.get("id"),
-        "name": user.get("user_metadata", {}).get("full_name", "Anonymous User"),
-        "email": user.get("email"),
-        "role": "student",
-        "university_id": None
+        "role": "faculty",
+        "university_id": None,
+        "status": "active"
     }).execute()
     return profile.data
 

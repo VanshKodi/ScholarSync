@@ -23,10 +23,6 @@ export async function loginWithGoogle() {
   }
 }
 
-const hasProfile = await request("check_profile");
-if (!hasProfile.has_profile) {
-  await request("create_profile");
-}
 export async function logout() {
   await supabase.auth.signOut();
 }
