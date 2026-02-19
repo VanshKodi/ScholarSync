@@ -23,6 +23,7 @@ async def check_profile(user: dict = Depends(get_current_user)):
     """Check if current authenticated user has a profile"""
     profile = supabase.table("profiles").select("*").eq("id", user.get("id")).single().execute()
     return {"has_profile": bool(profile.data)}
+
 @router.get("/auth/create_profile")
 async def create_profile(user: dict = Depends(get_current_user)):
     """Create a profile for the current authenticated user"""

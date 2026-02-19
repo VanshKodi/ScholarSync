@@ -1,7 +1,6 @@
 import { supabase } from "../../utils/supabase.js";
 import { Session, request } from "../../api.js";
 
-console.log("Overview file loaded");
 
 /* ======================
    Main
@@ -44,8 +43,6 @@ export function renderProfile(container, user, profile) {
       <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
         <button id="adminBtn">Become Admin</button>
         <button id="joinBtn">Join University</button>
-        <button id="facultyBtn">Become Faculty</button>
-        <button id="viewBtn">View Join Requests</button>
       </div>
 
       <div id="joinReqsContainer" style="margin-top:20px;"></div>
@@ -66,9 +63,6 @@ export function renderProfile(container, user, profile) {
   }
 }
 
-/* ======================
-   Event handlers (no nested inline handlers)
-====================== */
 
 function attachHandlers(container, user, profile) {
   document.getElementById("adminBtn").addEventListener("click", async () => {
@@ -88,77 +82,4 @@ function attachHandlers(container, user, profile) {
     renderProfile(container, user, refreshed);
   });
 
-  document.getElementById("facultyBtn").addEventListener("click", async () => {
-    if (prompt("Enter 123159 to confirm") !== "123159") return;
-    await request("/become-faculty", { method: "POST" });
-    const { data: refreshed } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-    renderProfile(container, user, refreshed);
-  });
-
-  document.getElementById("viewBtn").addEventListener("click", () => {
-    if (!profile?.university_id) {
-      alert("You are not assigned to any university.");
-      return;
-    }
-    renderJoinRequests(profile.university_id);
-  });
-}
-/* ======================
-   Join Requests Viewer
-====================== */
-
-async function renderJoinRequests(universityId) {
-  const container = document.getElementById("joinReqsContainer");
-  container.innerHTML = "Loading...";
-
-  try {
-    const requests = await request(
-      `/university-join-requests/${encodeURIComponent(universityId)}`
-    );
-
-    if (!requests.length) {
-      container.innerHTML = "<p>No join requests.</p>";
-      return;
-    }
-
-    container.innerHTML = requests
-      .map(
-        (r) => `
-        <div style="border:1px solid #ccc;padding:10px;margin-bottom:10px;">
-          <p><b>Requester:</b> ${r.requester_id}</p>
-          <p><b>Status:</b> ${r.status}</p>
-
-          ${
-            r.status === "pending"
-              ? `
-                <button data-id="${r.request_id}" class="approveBtn">Approve</button>
-                <button data-id="${r.request_id}" class="rejectBtn">Reject</button>
-              `
-              : ""
-          }
-        </div>
-      `
-      )
-      .join("");
-
-    // event delegation for approve/reject
-    container.querySelectorAll('.approveBtn, .rejectBtn').forEach(b=>b.removeEventListener && b.removeEventListener());
-    container.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button[data-id]');
-      if (!btn) return;
-      const id = btn.dataset.id;
-      if (btn.classList.contains('approveBtn')) {
-        await request(`/approve-join-request/${id}`, { method: 'POST' });
-        renderJoinRequests(universityId);
-      }
-      if (btn.classList.contains('rejectBtn')) {
-        await request(`/reject-join-request/${id}`, { method: 'POST' });
-        renderJoinRequests(universityId);
-      }
-    });
-
-  } catch (err) {
-    container.innerHTML =
-      "<p style='color:red;'>Failed to load join requests.</p>";
-  }
 }
