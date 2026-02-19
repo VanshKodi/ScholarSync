@@ -14,6 +14,14 @@ def approve_join_request(request_id: str):
 
     university_id = req.data["university_id"]
     requester_id = req.data["requester_id"]
+    
+    # Verify user doesn't already have a university
+    profile = supabase.table("profiles").select("university_id").eq("id", requester_id).single().execute()
+    if profile.data and profile.data.get("university_id") is not None:
+        raise HTTPException(
+            status_code=400, 
+            detail="User already belongs to a university. Cannot approve duplicate join request."
+        )
 
     supabase.table("profiles").update({"university_id": university_id}).eq("id", requester_id).execute()
 

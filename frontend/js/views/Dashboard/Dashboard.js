@@ -7,7 +7,9 @@ import { DocumentUpload } from "../../components/DocumentUpload.js";
 import { Overview } from "./Overview.js";
 import { Documents } from "./Documents.js";
 import { Profile } from "./Profile.js";
-import { Settings } from "./Settings.js";   
+import { Settings } from "./Settings.js";
+import { JoinRequests } from "./JoinRequests.js";
+
 export default function Dashboard({ root }) {
   root.innerHTML = "";
 
@@ -26,6 +28,11 @@ export default function Dashboard({ root }) {
       const upload = DocumentUpload();
       main.appendChild(upload);
       Documents(main);
+      return;
+    }
+
+    if (view === "join-requests") {
+      JoinRequests(main);
       return;
     }
 

@@ -42,6 +42,9 @@ export default function Sidebar({ onSelect }) {
     item("⚙️", "Grade", "grade"),
     item("⚙️", "CLO", "clo"),
 
+    section("Administration"),
+    item("📋", "Join Requests", "join-requests"),
+
     section("Misc"),
     item("👤", "TA-Allotment", "ta"),
     item("⚙️", "Innovative Learning", "innovative"),

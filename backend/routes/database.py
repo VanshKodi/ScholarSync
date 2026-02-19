@@ -19,6 +19,17 @@ async def test_supabase():
         return {"status": "Error", "detail": str(e)}
 
 
+@router.get("/auth/profile")
+async def get_current_profile(user: dict = Depends(get_current_user)):
+    """Get current authenticated user's profile"""
+    profile = supabase.table("profiles").select("*").eq("id", user.get("id")).single().execute()
+    
+    if not profile.data:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Profile not found")
+    
+    return profile.data
+
 
 @router.post("/become-admin/{university_name}")
 async def become_admin(university_name: str, user: dict = Depends(get_current_user)):
