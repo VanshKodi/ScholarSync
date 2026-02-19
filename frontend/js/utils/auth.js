@@ -1,6 +1,6 @@
 // auth.js
 import { supabase } from "./supabase.js";
-import { Session } from "../api.js";
+import { Session, request } from "../api.js";
 
 /* ---------- AUTH ACTIONS ---------- */
 
@@ -11,12 +11,22 @@ export async function loginWithGoogle() {
       redirectTo: `${window.location.origin}/#/dashboard`
     }
   });
-
   if (error) {
-    console.error("Google login failed:", error.message);
+    console.error("Login error:", error);
+    return;
+  } else {
+    const hasProfile = await request("check_profile");
+    if (!hasProfile.has_profile) {
+      await request("create_profile");
+    }
+
   }
 }
 
+const hasProfile = await request("check_profile");
+if (!hasProfile.has_profile) {
+  await request("create_profile");
+}
 export async function logout() {
   await supabase.auth.signOut();
 }

@@ -18,6 +18,22 @@ async def test_supabase():
     except Exception as e:
         return {"status": "Error", "detail": str(e)}
 
+@router.get("/auth/check_profile")
+async def check_profile(user: dict = Depends(get_current_user)):
+    """Check if current authenticated user has a profile"""
+    profile = supabase.table("profiles").select("*").eq("id", user.get("id")).single().execute()
+    return {"has_profile": bool(profile.data)}
+@router.get("/auth/create_profile")
+async def create_profile(user: dict = Depends(get_current_user)):
+    """Create a profile for the current authenticated user"""
+    profile = supabase.table("profiles").insert({
+        "id": user.get("id"),
+        "name": user.get("user_metadata", {}).get("full_name", "Anonymous User"),
+        "email": user.get("email"),
+        "role": "student",
+        "university_id": None
+    }).execute()
+    return profile.data
 
 @router.get("/auth/profile")
 async def get_current_profile(user: dict = Depends(get_current_user)):
