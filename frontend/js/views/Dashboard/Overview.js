@@ -1,12 +1,25 @@
 import { supabase } from "../../utils/supabase.js";
 import { Session, request } from "../../api.js";
 
+async function handleLogin() {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) return;
+
+  const hasProfile = await request("check_profile");
+
+  if (!hasProfile.has_profile) {
+    await request("create_profile");
+  }
+}
+
 
 /* ======================
    Main
 ====================== */
 
 export async function Overview(container) {
+  handleLogin();
   console.log("Overview called");
 
   const session = await Session.get();
