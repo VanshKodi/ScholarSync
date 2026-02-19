@@ -14,13 +14,7 @@ export async function loginWithGoogle() {
   if (error) {
     console.error("Login error:", error);
     return;
-  } else {
-    const hasProfile = await request("check_profile");
-    if (!hasProfile.has_profile) {
-      await request("create_profile");
-    }
-
-  }
+  } 
 }
 
 export async function logout() {
