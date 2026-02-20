@@ -6,12 +6,20 @@ from config.auth import get_current_user
 router = APIRouter()
 @router.post("/create-profile")
 def create_profile(current_user: dict = Depends(get_current_user)):
-    print("Creating profile for user:", current_user)
     user_id = current_user.get("id")
-    resp = supabase.table("profiles").insert({"id": user_id, "role": "faculty", "status": "active"}).execute()
-    if resp.error:
+
+    resp = supabase.table("profiles") \
+        .insert({
+            "id": user_id,
+            "role": "faculty",
+            "status": "active"
+        }) \
+        .execute()
+
+    if not resp.data:
         raise HTTPException(status_code=400, detail="Failed to create profile")
-    return resp.data
+
+    return resp.data[0]
 
 @router.post("/create-university/{university_name}")
 def create_university(university_name: str, current_user: dict = Depends(get_current_user)):
@@ -32,8 +40,7 @@ def apply_to_join_university(university_id: str, current_user: dict = Depends(ge
 
     resp = supabase.table("university_join_requests").insert({
         "requester_id": user_id,
-        "university_id": university_id,
-        "message": "message"
+        "university_id": university_id
     }).execute()
 
     if not resp.data:
@@ -54,8 +61,7 @@ def get_all_join_requests(university_id: str, current_user: dict = Depends(get_c
         raise HTTPException(status_code=403, detail="Not authorized to view join requests")
 
     resp = supabase.table("university_join_requests").select("*").eq("university_id", university_id).execute()
-    if not resp.data:
-        raise HTTPException(status_code=404, detail="No join requests found for this university")
+    return resp.data or []
 
     return resp.data
 @router.get("/get-user-profile")
@@ -84,23 +90,31 @@ async def handle_join_request(
         request_id = body.get("request_id")
         action = body.get("action")
 
-        if not request_id or not action:
-            raise HTTPException(status_code=400, detail="Missing request_id or action")
+        if action not in ["accept", "reject"]:
+            raise HTTPException(status_code=400, detail="Invalid action")
+
+        if not request_id:
+            raise HTTPException(status_code=400, detail="Missing request_id")
 
         admin_id = current_user.get("id")
 
-        # 1️⃣ Check admin role
+        # 1️⃣ Verify admin
         admin_profile = supabase.table("profiles") \
             .select("*") \
             .eq("id", admin_id) \
             .execute()
 
-        if not admin_profile.data or admin_profile.data[0]["role"] != "admin":
+        if not admin_profile.data:
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        profile = admin_profile.data[0]
+
+        if profile["role"] != "admin":
             raise HTTPException(status_code=403, detail="Only admin can handle requests")
 
-        university_id = admin_profile.data[0]["university_id"]
+        university_id = profile["university_id"]
 
-        # 2️⃣ Get join request
+        # 2️⃣ Get request
         req_resp = supabase.table("university_join_requests") \
             .select("*") \
             .eq("request_id", request_id) \
@@ -112,31 +126,33 @@ async def handle_join_request(
 
         join_request = req_resp.data[0]
 
+        # 3️⃣ If accept → update profile
         if action == "accept":
-            supabase.table("profiles") \
+
+            update_profile = supabase.table("profiles") \
                 .update({
                     "university_id": university_id,
                     "role": "faculty"
                 }) \
                 .eq("id", join_request["requester_id"]) \
                 .execute()
-            supabase.table("university_join_requests") \
-                .delete() \
-                .eq("request_id", request_id) \
-                .execute()
-            return {"message": "Request approved"}
 
-        elif action == "reject":
-            supabase.table("university_join_requests") \
-                .delete() \
-                .eq("request_id", request_id) \
-                .execute()
-            
-            return {"message": "Request rejected"}
+            if not update_profile.data:
+                raise HTTPException(status_code=500, detail="Failed to update user profile")
 
-        else:
-            raise HTTPException(status_code=400, detail="Invalid action")
+        # 4️⃣ Delete request (both accept & reject)
+        delete_resp = supabase.table("university_join_requests") \
+            .delete() \
+            .eq("request_id", request_id) \
+            .execute()
 
+        if not delete_resp.data:
+            raise HTTPException(status_code=500, detail="Failed to delete request")
+
+        return {"message": f"Request {action}ed successfully"}
+
+    except HTTPException:
+        raise
     except Exception as e:
         print("ERROR:", e)
         raise HTTPException(status_code=500, detail="Internal server error")
