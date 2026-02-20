@@ -1,3 +1,25 @@
+// Dashboard CSS - hardcoded directly in component
+const dashboardCSS = `
+  .dashboard-layout {
+    display: flex;
+    height: calc(100vh - 64px);
+  }
+  .dashboard-main {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    background: #f6f8fc;
+  }
+`;
+
+// Inject styles once
+if (!document.getElementById('dashboard-styles')) {
+  const style = document.createElement('style');
+  style.id = 'dashboard-styles';
+  style.textContent = dashboardCSS;
+  document.head.appendChild(style);
+}
+
 // components (go up twice → js → components)
 import Navbar from "../../components/Navbar.js";
 import Sidebar from "../../components/Sidebar.js";

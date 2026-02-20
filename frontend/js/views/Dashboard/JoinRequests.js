@@ -1,3 +1,111 @@
+// JoinRequests CSS - hardcoded directly in component
+const joinRequestsCSS = `
+  .join-requests-section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .join-requests-section h2 {
+    margin-bottom: 24px;
+    color: #1f2937;
+  }
+  .loading {
+    text-align: center;
+    color: #6b7280;
+    padding: 32px;
+  }
+  .empty-state {
+    text-align: center;
+    color: #9ca3af;
+    padding: 32px;
+    font-style: italic;
+  }
+  .requests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .request-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
+    transition: background-color 0.2s ease;
+  }
+  .request-item:hover {
+    background-color: #f3f4f6;
+  }
+  .request-info {
+    flex: 1;
+  }
+  .request-info p {
+    margin: 4px 0;
+    font-size: 0.95rem;
+  }
+  .requester-id {
+    font-weight: 600;
+    color: #1f2937;
+  }
+  .request-status {
+    color: #6b7280;
+    font-size: 0.9rem;
+  }
+  .request-date {
+    color: #9ca3af;
+    font-size: 0.85rem;
+  }
+  .request-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+  }
+  .btn-primary {
+    background: #10b981;
+    color: white;
+  }
+  .btn-primary:hover {
+    background: #059669;
+    transform: translateY(-1px);
+  }
+  .btn-danger {
+    background: #ef4444;
+    color: white;
+  }
+  .btn-danger:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+  }
+  .btn:active {
+    transform: translateY(0);
+  }
+  .error {
+    color: #dc2626;
+    padding: 12px;
+    background: #fee2e2;
+    border-radius: 6px;
+  }
+`;
+
+// Inject styles once
+if (!document.getElementById('joinrequests-styles')) {
+  const style = document.createElement('style');
+  style.id = 'joinrequests-styles';
+  style.textContent = joinRequestsCSS;
+  document.head.appendChild(style);
+}
+
 import { request } from "../../api.js";
 
 export function JoinRequests(container) {

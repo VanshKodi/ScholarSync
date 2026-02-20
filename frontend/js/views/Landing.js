@@ -1,3 +1,65 @@
+// Landing CSS - hardcoded directly in component
+const landingCSS = `
+  .landing {
+    background: #f6f8fc;
+    min-height: calc(100vh - 64px);
+  }
+  .landing-hero {
+    padding: 96px 32px;
+    text-align: center;
+    background: #ffffff;
+  }
+  .landing-hero h1 {
+    font-size: 2.4rem;
+    margin-bottom: 12px;
+  }
+  .landing-hero p {
+    color: #475569;
+    margin-bottom: 24px;
+  }
+  .landing-hero-btn {
+    padding: 10px 20px;
+    border-radius: 6px;
+    border: none;
+    background: #5b6cff;
+    color: white;
+    cursor: pointer;
+  }
+  .landing-features {
+    padding: 64px 32px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .landing-card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+  }
+  .landing-card img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 12px;
+  }
+  .landing-card h3 {
+    margin-bottom: 8px;
+    color: #1f2937;
+  }
+  .landing-card p {
+    color: #64748b;
+    font-size: 0.95rem;
+  }
+`;
+
+// Inject styles once
+if (!document.getElementById('landing-styles')) {
+  const style = document.createElement('style');
+  style.id = 'landing-styles';
+  style.textContent = landingCSS;
+  document.head.appendChild(style);
+}
+
 import Navbar from "../components/Navbar.js";
 
 function card(imgpath, title, description) {
@@ -53,7 +115,7 @@ export default function Landing({ root }) {
 
   // Features section
   const features = document.createElement("section");
-  features.className = "features";
+  features.className = "landing-features";
 
   features.appendChild(
     card("./resources/images/schedule.png", "Schedules", "Manage your academic timetable effortlessly.")
