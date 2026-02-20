@@ -1,17 +1,6 @@
 import { supabase } from "../../utils/supabase.js";
 import { Session, request } from "../../api.js";
 
-async function handleLogin() {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session) return;
-
-  const hasProfile = await request("check_profile");
-
-  if (!hasProfile.has_profile) {
-    await request("create_profile");
-  }
-}
 
 
 /* ======================
@@ -19,7 +8,6 @@ async function handleLogin() {
 ====================== */
 
 export async function Overview(container) {
-  handleLogin();
   console.log("Overview called");
 
   const session = await Session.get();
@@ -54,6 +42,7 @@ export function renderProfile(container, user, profile) {
       <div id="profileInfo"></div>
 
       <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button id="getProfileBtn">Get Profile</button>
         <button id="adminBtn">Become Admin</button>
         <button id="joinBtn">Join University</button>
       </div>
@@ -77,22 +66,46 @@ export function renderProfile(container, user, profile) {
 }
 
 
-function attachHandlers(container, user, profile) {
-  document.getElementById("adminBtn").addEventListener("click", async () => {
-    const name = prompt("University name:");
+async function attachHandlers(container, user) {
+  const adminBtn = container.querySelector("#adminBtn");
+  const joinBtn = container.querySelector("#joinBtn");
+  const getProfileBtn = container.querySelector("#getProfileBtn");
+
+  adminBtn.addEventListener("click", async () => {
+    const name = prompt("Enter University name:");
     if (!name) return;
-    await request(`/become-admin/${encodeURIComponent(name)}`, { method: "POST" });
-    // reload small part
-    const { data: refreshed } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-    renderProfile(container, user, refreshed);
+
+    await request(`/create-university/${encodeURIComponent(name)}`, {
+      method: "POST",
+    });
+
+    await refreshProfile(container, user);
   });
 
-  document.getElementById("joinBtn").addEventListener("click", async () => {
+  joinBtn.addEventListener("click", async () => {
     const id = prompt("University ID:");
     if (!id) return;
-    await request(`/apply-to-join-university/${encodeURIComponent(id)}`, { method: "POST" });
-    const { data: refreshed } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-    renderProfile(container, user, refreshed);
+
+    await request(`/apply-to-join-university/${encodeURIComponent(id)}`, {
+      method: "POST",
+    });
+
+    await refreshProfile(container, user);
   });
 
+  getProfileBtn.addEventListener("click", async () => {
+    console.log("Fetching profile...");
+    await request(`/create-profile`, { method: "POST" });
+    await refreshProfile(container, user);
+  });
+}
+
+async function refreshProfile(container, user) {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  renderProfile(container, user, profile);
 }

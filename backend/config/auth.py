@@ -1,3 +1,4 @@
+# config/auth.py
 import os
 import requests
 from dotenv import load_dotenv
@@ -12,7 +13,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 class SupabaseAuthError(Exception):
     pass
-
 
 def verify_supabase_token(token: str) -> dict:
     """

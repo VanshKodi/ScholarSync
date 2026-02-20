@@ -31,20 +31,7 @@ import { Documents } from "./Documents.js";
 import { JoinRequests } from "./JoinRequests.js";
 
 import { supabase } from "../../utils/supabase.js";
-
-async function handleLogin() {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  if (!session) return;
-
-  const hasProfile = await request("check_profile");
-
-  if (!hasProfile.has_profile) {
-    await request("create_profile");
-  }
-}
-
-handleLogin();
+import { request } from "../../api.js";
 
 export default function Dashboard({ root }) {
   root.innerHTML = "";
