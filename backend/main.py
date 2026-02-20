@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from routes import test
-from routes.testgemini import router as gemini_router 
 from routes.database import router as database_router 
+from routes.documents import router as documents_router 
+
 from fastapi.middleware.cors import CORSMiddleware
 # To be used oterwhere
 from config.supabase import supabase
@@ -21,6 +21,5 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(test.router)
-app.include_router(gemini_router)
 app.include_router(database_router)
+app.include_router(documents_router)
