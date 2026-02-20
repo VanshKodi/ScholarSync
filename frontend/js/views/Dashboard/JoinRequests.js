@@ -124,7 +124,7 @@ export function JoinRequests(container) {
   async function loadAndRender() {
     try {
       // Get current user's university_id
-      const profileResp = await request("/auth/profile", { method: "GET" });
+      const profileResp = await request("/get-user-profile", { method: "GET" });
       const universityId = profileResp.university_id;
 
       if (!universityId) {
@@ -133,7 +133,7 @@ export function JoinRequests(container) {
       }
 
       // Fetch join requests
-      const requests = await request(`/university-join-requests/${universityId}`, {
+      const requests = await request(`/all-join-requests/${universityId}`, {
         method: "GET"
       });
 
@@ -161,9 +161,6 @@ export function JoinRequests(container) {
         requesterName.className = "requester-id";
         requesterName.textContent = `User: ${req.requester_id.substring(0, 8)}...`;
 
-        const status = document.createElement("p");
-        status.className = "request-status";
-        status.textContent = `Status: ${req.status}`;
 
         const createdAt = document.createElement("p");
         createdAt.className = "request-date";
@@ -173,43 +170,39 @@ export function JoinRequests(container) {
 
         // Only show action buttons if status is pending
         let actions = null;
-        if (req.status === "pending") {
-          actions = document.createElement("div");
-          actions.className = "request-actions";
+        actions = document.createElement("div");
+        actions.className = "request-actions";
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "btn btn-primary";
+        approveBtn.textContent = "Approve";
+        approveBtn.onclick = async () => {
+          try {
+            await request("/handle-join-request", {
+              method: "POST",
+              body: { request_id: req.request_id, action: "accept" }
+            });
+            loadAndRender(); // Refresh list
+          } catch (error) {
+            alert("Error approving request: " + error.detail || error);
+          }
+        };
+        const rejectBtn = document.createElement("button");
+        rejectBtn.className = "btn btn-danger";
+        rejectBtn.textContent = "Reject";
+        rejectBtn.onclick = async () => {
+          try {
+            await request("/handle-join-request", {
+              method: "POST",
+              body: { request_id: req.request_id, action: "reject" }
+            });
+            loadAndRender(); // Refresh list
+          } catch (error) {
+            alert("Error rejecting request: " + error.detail || error);
+          }
+        };
 
-          const approveBtn = document.createElement("button");
-          approveBtn.className = "btn btn-primary";
-          approveBtn.textContent = "Approve";
-          approveBtn.onclick = async () => {
-            try {
-              await request("/handle-join-request", {
-                method: "POST",
-                body: { request_id: req.request_id, action: "accept" }
-              });
-              loadAndRender(); // Refresh list
-            } catch (error) {
-              alert("Error approving request: " + error.detail || error);
-            }
-          };
-
-          const rejectBtn = document.createElement("button");
-          rejectBtn.className = "btn btn-danger";
-          rejectBtn.textContent = "Reject";
-          rejectBtn.onclick = async () => {
-            try {
-              await request("/handle-join-request", {
-                method: "POST",
-                body: { request_id: req.request_id, action: "reject" }
-              });
-              loadAndRender(); // Refresh list
-            } catch (error) {
-              alert("Error rejecting request: " + error.detail || error);
-            }
-          };
-
-          actions.append(approveBtn, rejectBtn);
-        }
-
+        actions.append(approveBtn, rejectBtn);
+        
         item.append(info);
         if (actions) item.appendChild(actions);
         list.appendChild(item);
