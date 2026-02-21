@@ -65,6 +65,11 @@ const documentsCSS = `
   margin-top: 10px;
   display: none;
   gap: 10px;
+  flex-wrap: wrap;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
 }
 
 .advanced-filters.active {
@@ -73,11 +78,124 @@ const documentsCSS = `
 
 .file-upload {
   margin: 20px 0;
-  padding: 16px;
-  border: 2px dashed #d1d5db;
-  border-radius: 10px;
-  text-align: center;
-  background: #f9fafb;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.upload-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.upload-subtitle {
+  margin: 0 0 14px;
+  font-size: 0.86rem;
+  color: #64748b;
+}
+
+.upload-options {
+  margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 14px;
+}
+
+.upload-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mode-chip {
+  border: 1px solid #cbd5e1;
+  background: white;
+  color: #334155;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.mode-chip.active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.upload-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.upload-fields input,
+.upload-fields textarea,
+.upload-fields select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.upload-fields textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.upload-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.upload-status {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.upload-status.error {
+  color: #b91c1c;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+}
+
+.upload-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.upload-spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: upload-spin 0.8s linear infinite;
+}
+
+.upload-btn.loading .upload-spinner {
+  display: inline-block;
+}
+
+@keyframes upload-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .docs-grid {
@@ -158,6 +276,14 @@ const documentsCSS = `
 .dropdown-item:hover {
   background: #f3f4f6;
 }
+
+.advanced-filters label {
+  font-size: 0.85rem;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 `;
 
 if (!document.getElementById("documents-styles")) {
@@ -187,41 +313,52 @@ export function Documents(container) {
         </label>
       </div>
       <div class="advanced-filters" id="advancedFilters">
-        <input type="text" placeholder="Filter by author..." />
-        <input type="text" placeholder="Filter by tag..." />
+        <label>
+          <input type="checkbox" id="onlyActiveFilter" checked />
+          Only active
+        </label>
+        <select id="descriptionTypeFilter">
+          <option value="all">All descriptions</option>
+          <option value="human">Human description</option>
+          <option value="ai">AI description</option>
+        </select>
       </div>
     </div>
 
     <div class="file-upload">
-      <div>Select a file to upload</div>
+      <h3 class="upload-title">Upload Document</h3>
+      <p class="upload-subtitle">Select a file first, then choose new document or new version.</p>
       <input type="file" id="fileInput" />
 
-      <div id="uploadOptions" style="display:none; margin-top:16px;">
-        <label>
-          <input type="radio" name="uploadMode" value="new" checked />
-          Create New Document
-        </label>
-
-        <label style="margin-left:20px;">
-          <input type="radio" name="uploadMode" value="existing" />
-          Add Version To Existing
-        </label>
-
-        <div id="newDocFields" style="margin-top:12px;">
-          <input type="text" id="newDocTitle" placeholder="Document Title" />
-          <textarea id="newDocDescription" placeholder="Description"></textarea>
+      <div id="uploadOptions" class="upload-options" style="display:none;">
+        <div class="upload-mode-toggle">
+          <button type="button" class="mode-chip active" id="newDocModeBtn" data-mode="new">New Document</button>
+          <button type="button" class="mode-chip" id="existingModeBtn" data-mode="existing">New Version</button>
         </div>
 
-        <div id="existingDocFields" style="display:none; margin-top:12px;">
+        <div id="newDocFields" class="upload-fields">
+          <input type="text" id="newDocTitle" placeholder="Document title" />
+        </div>
+
+        <div id="existingDocFields" class="upload-fields" style="display:none;">
           <div class="searchable-dropdown">
-            <input type="text" id="docSearchUpload" placeholder="Search document..." />
+            <input type="text" id="docSearchUpload" placeholder="Search existing document group..." />
             <div class="dropdown-results" id="docResults"></div>
           </div>
         </div>
 
-        <button id="confirmUploadBtn" style="margin-top:12px;">
-          Upload
-        </button>
+        <div class="upload-fields" style="margin-top:10px;">
+          <textarea id="docDescription" placeholder="Add a human description"></textarea>
+        </div>
+
+        <p id="uploadStatus" class="upload-status" aria-live="polite"></p>
+
+        <div class="upload-actions">
+          <button id="confirmUploadBtn" class="upload-btn" style="margin-top:12px;">
+            <span class="upload-spinner" aria-hidden="true"></span>
+            <span class="upload-btn-text">Upload</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -245,6 +382,8 @@ export function Documents(container) {
   const searchInput = card.querySelector("#docSearchInput");
   const advancedToggle = card.querySelector("#advancedToggle");
   const advancedFilters = card.querySelector("#advancedFilters");
+  const onlyActiveFilter = card.querySelector("#onlyActiveFilter");
+  const descriptionTypeFilter = card.querySelector("#descriptionTypeFilter");
   const globalColumn = card.querySelector("#globalDocs");
   const localColumn = card.querySelector("#localDocs");
 
@@ -252,13 +391,20 @@ export function Documents(container) {
   const uploadOptions = card.querySelector("#uploadOptions");
   const newFields = card.querySelector("#newDocFields");
   const existingFields = card.querySelector("#existingDocFields");
+  const newDocModeBtn = card.querySelector("#newDocModeBtn");
+  const existingModeBtn = card.querySelector("#existingModeBtn");
   const uploadSearchInput = card.querySelector("#docSearchUpload");
   const dropdownResults = card.querySelector("#docResults");
+  const uploadStatus = card.querySelector("#uploadStatus");
+  const uploadButton = card.querySelector("#confirmUploadBtn");
+  const uploadBtnText = card.querySelector(".upload-btn-text");
+  const descriptionInput = card.querySelector("#docDescription");
 
   let globalDocs = [];
   let localDocs = [];
   let documentGroups = [];
   let selectedGroupId = null;
+  let uploadMode = "new";
 
   /* ======================
      Load Documents
@@ -314,26 +460,44 @@ export function Documents(container) {
 
   function performSearch() {
     const query = searchInput.value.trim().toLowerCase();
+    const activeOnly = !advancedToggle.checked || onlyActiveFilter.checked;
+    const descriptionType = advancedToggle.checked
+      ? descriptionTypeFilter.value
+      : "all";
 
-    if (!advancedToggle.checked) {
-      const filteredGlobal = globalDocs.filter(doc =>
-        doc.title.toLowerCase().includes(query)
-      );
+    const applyFilters = (docs) => docs.filter(doc => {
+      const title = (doc.title || "").toLowerCase();
+      const humanDescription = (doc.human_description || "").toLowerCase();
+      const aiDescription = (doc.ai_description || "").toLowerCase();
 
-      const filteredLocal = localDocs.filter(doc =>
-        doc.title.toLowerCase().includes(query)
-      );
+      const matchesQuery = [title, humanDescription, aiDescription]
+        .some(value => value.includes(query));
 
-      renderDocs(filteredGlobal, globalColumn, "Global Documents");
-      renderDocs(filteredLocal, localColumn, "Local University Documents");
-    }
+      const isActive = doc.is_active !== false;
+
+      const hasDescriptionMatch = descriptionType === "all"
+        || (descriptionType === "human" && humanDescription.length > 0)
+        || (descriptionType === "ai" && aiDescription.length > 0);
+
+      return matchesQuery && (!activeOnly || isActive) && hasDescriptionMatch;
+    });
+
+    const filteredGlobal = applyFilters(globalDocs);
+    const filteredLocal = applyFilters(localDocs);
+
+    renderDocs(filteredGlobal, globalColumn, "Global Documents");
+    renderDocs(filteredLocal, localColumn, "Local University Documents");
   }
 
   searchInput.addEventListener("input", performSearch);
 
   advancedToggle.addEventListener("change", () => {
     advancedFilters.classList.toggle("active", advancedToggle.checked);
+    performSearch();
   });
+
+  onlyActiveFilter.addEventListener("change", performSearch);
+  descriptionTypeFilter.addEventListener("change", performSearch);
 
   /* ======================
      Upload UI
@@ -345,18 +509,22 @@ export function Documents(container) {
     }
   });
 
-  document.querySelectorAll("input[name='uploadMode']").forEach(radio => {
-    radio.addEventListener("change", () => {
-      if (radio.value === "new") {
-        newFields.style.display = "block";
-        existingFields.style.display = "none";
-      } else {
-        newFields.style.display = "none";
-        existingFields.style.display = "block";
-        loadDocumentGroups();
-      }
-    });
-  });
+  function setUploadMode(mode) {
+    uploadMode = mode;
+    const isNew = mode === "new";
+    selectedGroupId = isNew ? null : selectedGroupId;
+    newFields.style.display = isNew ? "block" : "none";
+    existingFields.style.display = isNew ? "none" : "block";
+    newDocModeBtn.classList.toggle("active", isNew);
+    existingModeBtn.classList.toggle("active", !isNew);
+
+    if (!isNew) {
+      loadDocumentGroups();
+    }
+  }
+
+  newDocModeBtn.addEventListener("click", () => setUploadMode("new"));
+  existingModeBtn.addEventListener("click", () => setUploadMode("existing"));
 
   async function loadDocumentGroups() {
     const groups = await request("/my-document-groups", { method: "GET" });
@@ -374,7 +542,7 @@ export function Documents(container) {
 
   function renderDropdown(list) {
     dropdownResults.innerHTML = "";
-    dropdownResults.style.display = "block";
+    dropdownResults.style.display = list.length ? "block" : "none";
 
     list.forEach(group => {
       const item = document.createElement("div");
@@ -390,48 +558,69 @@ export function Documents(container) {
       dropdownResults.appendChild(item);
     });
   }
+  function setUploadState(loading, message = "", isError = false) {
+    uploadButton.disabled = loading;
+    uploadButton.classList.toggle("loading", loading);
+    uploadBtnText.textContent = loading ? "Uploading..." : "Upload";
+    uploadStatus.textContent = message;
+    uploadStatus.classList.toggle("error", isError);
+  }
+
+  function resetUploadForm() {
+    fileInput.value = "";
+    uploadSearchInput.value = "";
+    card.querySelector("#newDocTitle").value = "";
+    descriptionInput.value = "";
+    dropdownResults.style.display = "none";
+    uploadOptions.style.display = "none";
+    selectedGroupId = null;
+    setUploadMode("new");
+  }
+
   /* ======================
    Upload Action
 ====================== */
-card.querySelector("#confirmUploadBtn")
-  .addEventListener("click", async () => {
+uploadButton.addEventListener("click", async () => {
 
-    const mode = document.querySelector("input[name='uploadMode']:checked").value;
     const file = fileInput.files[0];
 
     if (!file) {
-      alert("Select a file");
+      setUploadState(false, "Please select a file before uploading.", true);
+      return;
+    }
+
+    const description = descriptionInput.value.trim();
+    if (!description) {
+      setUploadState(false, "Please add a human description.", true);
       return;
     }
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("description", description);
 
     try {
+      setUploadState(true);
 
-      if (mode === "new") {
-        const title = card.querySelector("#newDocTitle").value;
-        const description = card.querySelector("#newDocDescription").value;
+      if (uploadMode === "new") {
+        const title = card.querySelector("#newDocTitle").value.trim();
 
         if (!title) {
-          alert("Title required");
+          setUploadState(false, "Title is required for a new document.", true);
           return;
         }
 
         formData.append("title", title);
-        formData.append("description", description || "");
 
         await request("/create-document-group-and-upload", {
           method: "POST",
           body: formData
         });
-
-        alert("Uploaded successfully");
       }
 
-      if (mode === "existing") {
+      if (uploadMode === "existing") {
         if (!selectedGroupId) {
-          alert("Select a document group");
+          setUploadState(false, "Please select an existing document group.", true);
           return;
         }
 
@@ -441,17 +630,15 @@ card.querySelector("#confirmUploadBtn")
           method: "POST",
           body: formData
         });
-
-        alert("New version uploaded");
       }
 
-      uploadOptions.style.display = "none";
-      fileInput.value = "";
-      loadDocuments();
+      setUploadState(false, "Upload complete.");
+      resetUploadForm();
+      await loadDocuments();
 
     } catch (err) {
-      console.error(err);
-      alert("Upload failed");
+      console.error("Document upload failed", err);
+      setUploadState(false, "Upload failed. Check console for details.", true);
     }
 });
   /* ======================
