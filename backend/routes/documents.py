@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from config.supabase import supabase
 from config.auth import get_current_user
 
@@ -32,17 +32,22 @@ def documents_visible_to_user(current_user: dict = Depends(get_current_user)):
             continue
 
         doc = supabase.table("documents") \
-            .select("*") \
+            .select("document_id, group_id, status, human_description, ai_description, created_at") \
             .eq("document_id", group["active_document_id"]) \
-            .eq("status", "ready") \
+            .limit(1) \
             .execute()
 
         if doc.data:
             d = doc.data[0]
             results.append({
+                "document_id": d.get("document_id"),
+                "group_id": d.get("group_id"),
                 "title": group["title"],
                 "scope": group["scope"],
                 "human_description": d.get("human_description"),
+                "ai_description": d.get("ai_description"),
+                "status": d.get("status"),
+                "is_active": True,
                 "created_at": d.get("created_at")
             })
 
@@ -63,19 +68,20 @@ def my_document_groups(current_user: dict = Depends(get_current_user)):
     university_id = profile.data[0].get("university_id")
 
     groups = supabase.table("document_groups") \
-        .select("doc_group_id, title") \
+         .select("doc_group_id, title, scope") \
         .or_(f"created_by.eq.{user_id},university_id.eq.{university_id}") \
+        .order("title") \
         .execute()
 
     return groups.data
 
-from fastapi import UploadFile, File, Form
 import uuid
 
 @router.post("/create-document-group-and-upload")
 async def create_document_group_and_upload(
     title: str = Form(...),
-    description: str = Form(None),
+    description: str = Form(""),
+    scope: str = Form("local"),
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
@@ -92,10 +98,13 @@ async def create_document_group_and_upload(
 
     university_id = profile.data[0].get("university_id")
 
+    if scope not in {"local", "global"}:
+        raise HTTPException(status_code=400, detail="Scope must be local or global")
+
     # 1️⃣ Create document group
     group_resp = supabase.table("document_groups").insert({
         "title": title,
-        "scope": "local",
+        "scope": scope,
         "created_by": user_id,
         "university_id": university_id
     }).execute()
@@ -136,6 +145,7 @@ async def create_document_group_and_upload(
 @router.post("/upload-new-version")
 async def upload_new_version(
     group_id: str = Form(...),
+    description: str = Form(""),
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
@@ -178,6 +188,7 @@ async def upload_new_version(
         "version_number": next_version,
         "file_name": file.filename,
         "file_path": path,
+        "human_description": description,
         "status": "uploaded"
     }).execute()
 

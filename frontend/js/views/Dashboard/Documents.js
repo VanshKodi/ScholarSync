@@ -155,6 +155,25 @@ const documentsCSS = `
   font-weight: 600;
 }
 
+.inline-select-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .inline-select-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.upload-group-scope {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-left: 8px;
+}
+
 .upload-actions {
   display: flex;
   justify-content: flex-end;
@@ -348,6 +367,13 @@ export function Documents(container) {
 
         <div id="newDocFields" class="upload-fields">
           <input type="text" id="newDocTitle" placeholder="Document title" />
+          <div class="inline-select-row">
+            <label class="field-label" for="docScope">Scope</label>
+            <select id="docScope">
+              <option value="local">Local</option>
+              <option value="global">Global</option>
+            </select>
+          </div>
         </div>
 
         <div id="existingDocFields" class="upload-fields" style="display:none;">
@@ -410,6 +436,7 @@ export function Documents(container) {
   const uploadButton = card.querySelector("#confirmUploadBtn");
   const uploadBtnText = card.querySelector(".upload-btn-text");
   const descriptionInput = card.querySelector("#docDescription");
+  const scopeSelect = card.querySelector("#docScope");
 
   let globalDocs = [];
   let localDocs = [];
@@ -423,7 +450,10 @@ export function Documents(container) {
 
   async function loadDocuments() {
     try {
-      const data = await request("/documents-visible-to-user", { method: "GET" });
+      const response = await request("/documents-visible-to-user", { method: "GET" });
+      const data = Array.isArray(response)
+        ? response
+        : (response?.documents || response?.items || []);
 
       globalDocs = data.filter(doc => doc.scope === "global");
       localDocs = data.filter(doc => doc.scope === "local");
@@ -457,6 +487,7 @@ export function Documents(container) {
         <div class="doc-title">${doc.title}</div>
         <div class="doc-meta">
           ${doc.human_description || "No description"}
+          ${doc.status ? ` • ${doc.status}` : ""}
         </div>
       `;
 
@@ -561,7 +592,7 @@ export function Documents(container) {
     list.forEach(group => {
       const item = document.createElement("div");
       item.className = "dropdown-item";
-      item.textContent = group.title;
+      item.innerHTML = `${group.title}<span class="upload-group-scope">${group.scope || "local"}</span>`;
 
       item.onclick = () => {
         selectedGroupId = group.doc_group_id;
@@ -585,6 +616,7 @@ export function Documents(container) {
     uploadSearchInput.value = "";
     card.querySelector("#newDocTitle").value = "";
     descriptionInput.value = "";
+    scopeSelect.value = "local";
     uploadStatus.textContent = "";
     dropdownResults.style.display = "none";
     uploadOptions.style.display = "none";
@@ -626,6 +658,7 @@ uploadButton.addEventListener("click", async () => {
         }
 
         formData.append("title", title);
+        formData.append("scope", scopeSelect.value);
 
         await request("/create-document-group-and-upload", {
           method: "POST",
