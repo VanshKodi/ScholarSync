@@ -86,7 +86,11 @@ const documentsCSS = `
 
 .upload-title {
   margin: 0 0 6px;
+<<<<<<< HEAD
   font-size: 1rem;
+=======
+  font-size: 1.05rem;
+>>>>>>> pr-2
   color: #0f172a;
 }
 
@@ -145,6 +149,38 @@ const documentsCSS = `
   resize: vertical;
 }
 
+<<<<<<< HEAD
+=======
+.upload-description-fields {
+  margin-top: 10px;
+}
+
+.field-label {
+  font-size: 0.84rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.inline-select-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .inline-select-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.upload-group-scope {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-left: 8px;
+}
+
+>>>>>>> pr-2
 .upload-actions {
   display: flex;
   justify-content: flex-end;
@@ -338,6 +374,16 @@ export function Documents(container) {
 
         <div id="newDocFields" class="upload-fields">
           <input type="text" id="newDocTitle" placeholder="Document title" />
+<<<<<<< HEAD
+=======
+          <div class="inline-select-row">
+            <label class="field-label" for="docScope">Scope</label>
+            <select id="docScope">
+              <option value="local">Local</option>
+              <option value="global">Global</option>
+            </select>
+          </div>
+>>>>>>> pr-2
         </div>
 
         <div id="existingDocFields" class="upload-fields" style="display:none;">
@@ -347,7 +393,12 @@ export function Documents(container) {
           </div>
         </div>
 
+<<<<<<< HEAD
         <div class="upload-fields" style="margin-top:10px;">
+=======
+        <div class="upload-fields upload-description-fields">
+          <label class="field-label" for="docDescription">Human description</label>
+>>>>>>> pr-2
           <textarea id="docDescription" placeholder="Add a human description"></textarea>
         </div>
 
@@ -399,6 +450,10 @@ export function Documents(container) {
   const uploadButton = card.querySelector("#confirmUploadBtn");
   const uploadBtnText = card.querySelector(".upload-btn-text");
   const descriptionInput = card.querySelector("#docDescription");
+<<<<<<< HEAD
+=======
+  const scopeSelect = card.querySelector("#docScope");
+>>>>>>> pr-2
 
   let globalDocs = [];
   let localDocs = [];
@@ -412,13 +467,15 @@ export function Documents(container) {
 
   async function loadDocuments() {
     try {
-      const data = await request("/documents-visible-to-user", { method: "GET" });
+      const response = await request("/documents-visible-to-user", { method: "GET" });
+      const data = Array.isArray(response)
+        ? response
+        : (response?.documents || response?.items || []);
 
       globalDocs = data.filter(doc => doc.scope === "global");
       localDocs = data.filter(doc => doc.scope === "local");
 
-      renderDocs(globalDocs, globalColumn, "Global Documents");
-      renderDocs(localDocs, localColumn, "Local University Documents");
+      performSearch();
 
     } catch (err) {
       console.error(err);
@@ -447,6 +504,7 @@ export function Documents(container) {
         <div class="doc-title">${doc.title}</div>
         <div class="doc-meta">
           ${doc.human_description || "No description"}
+          ${doc.status ? ` • ${doc.status}` : ""}
         </div>
       `;
 
@@ -504,15 +562,23 @@ export function Documents(container) {
   ====================== */
 
   fileInput.addEventListener("change", () => {
-    if (fileInput.files.length > 0) {
-      uploadOptions.style.display = "block";
+    uploadOptions.style.display = fileInput.files.length > 0 ? "block" : "none";
+
+    if (fileInput.files.length === 0) {
+      uploadStatus.textContent = "";
     }
   });
 
   function setUploadMode(mode) {
     uploadMode = mode;
     const isNew = mode === "new";
+<<<<<<< HEAD
     selectedGroupId = isNew ? null : selectedGroupId;
+=======
+    selectedGroupId = null;
+    uploadSearchInput.value = "";
+    dropdownResults.style.display = "none";
+>>>>>>> pr-2
     newFields.style.display = isNew ? "block" : "none";
     existingFields.style.display = isNew ? "none" : "block";
     newDocModeBtn.classList.toggle("active", isNew);
@@ -547,7 +613,7 @@ export function Documents(container) {
     list.forEach(group => {
       const item = document.createElement("div");
       item.className = "dropdown-item";
-      item.textContent = group.title;
+      item.innerHTML = `${group.title}<span class="upload-group-scope">${group.scope || "local"}</span>`;
 
       item.onclick = () => {
         selectedGroupId = group.doc_group_id;
@@ -571,6 +637,11 @@ export function Documents(container) {
     uploadSearchInput.value = "";
     card.querySelector("#newDocTitle").value = "";
     descriptionInput.value = "";
+<<<<<<< HEAD
+=======
+    scopeSelect.value = "local";
+    uploadStatus.textContent = "";
+>>>>>>> pr-2
     dropdownResults.style.display = "none";
     uploadOptions.style.display = "none";
     selectedGroupId = null;
@@ -611,6 +682,10 @@ uploadButton.addEventListener("click", async () => {
         }
 
         formData.append("title", title);
+<<<<<<< HEAD
+=======
+        formData.append("scope", scopeSelect.value);
+>>>>>>> pr-2
 
         await request("/create-document-group-and-upload", {
           method: "POST",
@@ -632,7 +707,10 @@ uploadButton.addEventListener("click", async () => {
         });
       }
 
+<<<<<<< HEAD
       setUploadState(false, "Upload complete.");
+=======
+>>>>>>> pr-2
       resetUploadForm();
       await loadDocuments();
 
