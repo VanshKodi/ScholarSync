@@ -86,7 +86,7 @@ const documentsCSS = `
 
 .upload-title {
   margin: 0 0 6px;
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: #0f172a;
 }
 
@@ -143,6 +143,16 @@ const documentsCSS = `
 .upload-fields textarea {
   min-height: 90px;
   resize: vertical;
+}
+
+.upload-description-fields {
+  margin-top: 10px;
+}
+
+.field-label {
+  font-size: 0.84rem;
+  color: #334155;
+  font-weight: 600;
 }
 
 .upload-actions {
@@ -347,7 +357,8 @@ export function Documents(container) {
           </div>
         </div>
 
-        <div class="upload-fields" style="margin-top:10px;">
+        <div class="upload-fields upload-description-fields">
+          <label class="field-label" for="docDescription">Human description</label>
           <textarea id="docDescription" placeholder="Add a human description"></textarea>
         </div>
 
@@ -417,8 +428,7 @@ export function Documents(container) {
       globalDocs = data.filter(doc => doc.scope === "global");
       localDocs = data.filter(doc => doc.scope === "local");
 
-      renderDocs(globalDocs, globalColumn, "Global Documents");
-      renderDocs(localDocs, localColumn, "Local University Documents");
+      performSearch();
 
     } catch (err) {
       console.error(err);
@@ -504,15 +514,19 @@ export function Documents(container) {
   ====================== */
 
   fileInput.addEventListener("change", () => {
-    if (fileInput.files.length > 0) {
-      uploadOptions.style.display = "block";
+    uploadOptions.style.display = fileInput.files.length > 0 ? "block" : "none";
+
+    if (fileInput.files.length === 0) {
+      uploadStatus.textContent = "";
     }
   });
 
   function setUploadMode(mode) {
     uploadMode = mode;
     const isNew = mode === "new";
-    selectedGroupId = isNew ? null : selectedGroupId;
+    selectedGroupId = null;
+    uploadSearchInput.value = "";
+    dropdownResults.style.display = "none";
     newFields.style.display = isNew ? "block" : "none";
     existingFields.style.display = isNew ? "none" : "block";
     newDocModeBtn.classList.toggle("active", isNew);
@@ -571,6 +585,7 @@ export function Documents(container) {
     uploadSearchInput.value = "";
     card.querySelector("#newDocTitle").value = "";
     descriptionInput.value = "";
+    uploadStatus.textContent = "";
     dropdownResults.style.display = "none";
     uploadOptions.style.display = "none";
     selectedGroupId = null;
@@ -632,7 +647,6 @@ uploadButton.addEventListener("click", async () => {
         });
       }
 
-      setUploadState(false, "Upload complete.");
       resetUploadForm();
       await loadDocuments();
 
