@@ -137,6 +137,22 @@ async def handle_join_request(
             if not update_profile.data:
                 raise HTTPException(status_code=500, detail="Failed to update user profile")
 
+            # Notify the accepted user
+            try:
+                uni_resp = supabase.table("universities") \
+                    .select("name") \
+                    .eq("university_id", university_id) \
+                    .execute()
+                uni_name = uni_resp.data[0]["name"] if uni_resp.data else "your university"
+                supabase.table("notifications").insert({
+                    "user_id": join_request["requester_id"],
+                    "type":    "application_accepted",
+                    "title":   "Application accepted",
+                    "message": f"You have been accepted as a faculty member of {uni_name}.",
+                }).execute()
+            except Exception as notif_exc:
+                print(f"WARNING – could not create acceptance notification: {notif_exc}")
+
         # 4️⃣ Delete request (both accept & reject)
         delete_resp = supabase.table("university_join_requests") \
             .delete() \

@@ -6,3 +6,5 @@ supabase
 requests
 pydantic
 google-genai
+pypdf
+python-docx

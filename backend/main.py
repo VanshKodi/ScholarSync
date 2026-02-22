@@ -1,11 +1,13 @@
 from fastapi import FastAPI
-from routes.database import router as database_router 
-from routes.documents import router as documents_router 
+from routes.database import router as database_router
+from routes.documents import router as documents_router
+from routes.notifications import router as notifications_router
 
 from fastapi.middleware.cors import CORSMiddleware
-# To be used oterwhere
+# To be used elsewhere
 from config.supabase import supabase
 from config.gemini import client
+from workers.processor import start_background_worker
 # uvicorn main:app --reload
 # cloudflared tunnel run scholarsync-backend
 import os
@@ -33,3 +35,10 @@ app.add_middleware(
 )
 app.include_router(database_router)
 app.include_router(documents_router)
+app.include_router(notifications_router)
+
+
+@app.on_event("startup")
+def startup_event():
+    print("[MAIN] Starting background document processor …")
+    start_background_worker()
