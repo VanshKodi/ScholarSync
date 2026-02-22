@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends,HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from config.supabase import supabase
 from config.auth import get_current_user
 
@@ -63,7 +63,6 @@ def get_all_join_requests(university_id: str, current_user: dict = Depends(get_c
     resp = supabase.table("university_join_requests").select("*").eq("university_id", university_id).execute()
     return resp.data or []
 
-    return resp.data
 @router.get("/get-user-profile")
 def get_user_profile(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("id")
@@ -77,8 +76,6 @@ def get_user_profile(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Profile not found")
 
     return resp.data[0]
-
-from fastapi import APIRouter, Depends, HTTPException, Request
 
 @router.post("/handle-join-request")
 async def handle_join_request(

@@ -1,6 +1,6 @@
 import { supabase } from "./utils/supabase.js";
 
-const API_BASE = "https://api.vanshkodi.in";
+const API_BASE = window.__ENV__?.API_BASE || "https://api.vanshkodi.in";
 
 // Simple session cache / manager
 const Session = {
