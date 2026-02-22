@@ -8,15 +8,25 @@ from config.supabase import supabase
 from config.gemini import client
 # uvicorn main:app --reload
 # cloudflared tunnel run scholarsync-backend
+import os
+
 app = FastAPI()
+
+# Base allowed origins; extend via EXTRA_CORS_ORIGINS env var (comma-separated)
+_base_origins = [
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+    "https://www.vanshkodi.in",
+]
+_extra = os.getenv("EXTRA_CORS_ORIGINS", "")
+_extra_origins = [o.strip() for o in _extra.split(",") if o.strip()]
+allow_origins = _base_origins + _extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    # Allow local dev and production frontend on Render
-    allow_origins=[
-        "http://127.0.0.1:5500",
-        "http://localhost:5500",
-        "https://www.vanshkodi.in",
-    ],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
