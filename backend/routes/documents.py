@@ -31,7 +31,7 @@ def documents_visible_to_user(current_user: dict = Depends(get_current_user)):
 
     # Get user profile
     profile = supabase.table("profiles") \
-        .select("*") \
+        .select("university_id") \
         .eq("id", user_id) \
         .execute()
 
@@ -40,36 +40,36 @@ def documents_visible_to_user(current_user: dict = Depends(get_current_user)):
 
     university_id = profile.data[0].get("university_id")
 
-    # Fetch document groups visible to user
-    groups = supabase.table("document_groups") \
-        .select("*") \
+    # Single relational query: fetch visible groups with all their document versions
+    groups_resp = supabase.table("document_groups") \
+        .select(
+            "doc_group_id, title, scope, active_document_id, "
+            "documents(document_id, group_id, status, human_description, ai_description, created_at)"
+        ) \
         .or_(f"scope.eq.global,created_by.eq.{user_id},university_id.eq.{university_id}") \
         .execute()
 
     results = []
 
-    for group in groups.data:
-        if not group.get("active_document_id"):
+    for group in groups_resp.data:
+        active_id = group.get("active_document_id")
+        if not active_id:
             continue
 
-        doc = supabase.table("documents") \
-            .select("document_id, group_id, status, human_description, ai_description, created_at") \
-            .eq("document_id", group["active_document_id"]) \
-            .limit(1) \
-            .execute()
+        docs = group.get("documents") or []
+        active_doc = next((d for d in docs if d.get("document_id") == active_id), None)
 
-        if doc.data:
-            d = doc.data[0]
+        if active_doc:
             results.append({
-                "document_id": d.get("document_id"),
-                "group_id": d.get("group_id"),
-                "title": group["title"],
-                "scope": group["scope"],
-                "human_description": d.get("human_description"),
-                "ai_description": d.get("ai_description"),
-                "status": d.get("status"),
-                "is_active": True,
-                "created_at": d.get("created_at")
+                "document_id":       active_doc.get("document_id"),
+                "group_id":          active_doc.get("group_id"),
+                "title":             group["title"],
+                "scope":             group["scope"],
+                "human_description": active_doc.get("human_description"),
+                "ai_description":    active_doc.get("ai_description"),
+                "status":            active_doc.get("status"),
+                "is_active":         True,
+                "created_at":        active_doc.get("created_at"),
             })
 
     return results

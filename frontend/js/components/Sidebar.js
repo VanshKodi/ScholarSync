@@ -6,7 +6,8 @@ const icons = {
   settings: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   clipboard: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>`,
   chat: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
-  menu: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`
+  menu: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`,
+  bell: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`
 };
 
 // Sidebar CSS - hardcoded directly in component
@@ -89,6 +90,24 @@ const sidebarCSS = `
     justify-content: center;
     padding: 12px 0;
   }
+  .sidebar-item .notif-badge {
+    margin-left: auto;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 1px 6px;
+    min-width: 18px;
+    text-align: center;
+    display: none;
+  }
+  .sidebar-item .notif-badge.visible {
+    display: inline-block;
+  }
+  .sidebar.collapsed .notif-badge {
+    display: none !important;
+  }
 `;
 
 // Inject styles once
@@ -116,6 +135,7 @@ export default function Sidebar({ onSelect }) {
   function item(icon, text, id) {
     const btn = document.createElement("button");
     btn.className = "sidebar-item";
+    btn.dataset.view = id;
     btn.onclick = () => onSelect(id);
 
     btn.innerHTML = `
@@ -131,6 +151,21 @@ export default function Sidebar({ onSelect }) {
     h.textContent = title;
     return h;
   }
+
+  // Notifications item with unread badge
+  const notifBtn = document.createElement("button");
+  notifBtn.className = "sidebar-item";
+  notifBtn.dataset.view = "notifications";
+  notifBtn.innerHTML = `
+    <span class="icon">${icons.bell}</span>
+    <span class="label">Notifications</span>
+    <span class="notif-badge" id="notif-badge">0</span>
+  `;
+  notifBtn.onclick = () => {
+    const badge = notifBtn.querySelector("#notif-badge");
+    badge.classList.remove("visible");
+    onSelect("notifications");
+  };
 
   nav.append(
     item(icons.home, "Overview", "overview"),
@@ -151,9 +186,37 @@ export default function Sidebar({ onSelect }) {
     item(icons.settings, "Innovative Learning", "innovative"),
 
     section("ChatBot"),
-    item(icons.chat, "Chat with ScholarSync", "chat")
+    item(icons.chat, "Chat with ScholarSync", "chat"),
+
+    section("Account"),
+    notifBtn
   );
 
   aside.append(toggle, nav);
+
+  // Poll for unread notification count every 60 seconds.
+  // Self-cancels once the sidebar element is detached from the DOM.
+  async function pollUnreadCount() {
+    try {
+      const { request } = await import("../api.js");
+      const notifs = await request("/notifications");
+      const unread = (notifs || []).filter(n => !n.is_read).length;
+      const badge = aside.querySelector("#notif-badge");
+      if (badge) {
+        badge.textContent = unread > 99 ? "99+" : String(unread);
+        badge.classList.toggle("visible", unread > 0);
+      }
+    } catch (_) { /* best-effort */ }
+  }
+
+  pollUnreadCount();
+  const _pollInterval = setInterval(() => {
+    if (!aside.isConnected) {
+      clearInterval(_pollInterval);
+      return;
+    }
+    pollUnreadCount();
+  }, 60000);
+
   return aside;
 }

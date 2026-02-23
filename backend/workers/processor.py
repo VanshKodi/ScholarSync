@@ -17,6 +17,7 @@ Pipeline for each unprocessed document:
 """
 
 import io
+import html
 import time
 import threading
 import traceback
@@ -202,11 +203,12 @@ def process_document(doc: dict):
         pass
 
     if uploader_id:
+        safe_name = html.escape(file_name)
         _create_notification(
             uploader_id,
             "file_processing",
             "Document processing started",
-            f'"{file_name}" is being analysed and indexed. This may take a moment.',
+            f'<strong>{safe_name}</strong> is being analysed and indexed. This may take a moment.',
             doc_id=document_id,
             group_id=group_id,
         )
@@ -232,7 +234,7 @@ def process_document(doc: dict):
             _create_notification(
                 uploader_id, "file_ready",
                 "Document ready",
-                f'"{file_name}" has been uploaded (no text content to index).',
+                f'<strong>{html.escape(file_name)}</strong> has been uploaded (no text content to index).',
                 doc_id=document_id, group_id=group_id,
             )
         return
@@ -309,7 +311,7 @@ def process_document(doc: dict):
             uploader_id,
             "file_ready",
             "Document ready",
-            f'"{file_name}" has been processed and is now searchable.',
+            f'<strong>{html.escape(file_name)}</strong> has been processed and is now searchable.',
             doc_id=document_id,
             group_id=group_id,
         )
