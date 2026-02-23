@@ -6,7 +6,7 @@ from config.gemini import client as gemini_client
 router = APIRouter()
 
 GEN_MODEL        = "gemini-2.0-flash"
-EMBED_MODEL      = "text-embedding-004"
+EMBED_MODEL      = "gemini-embedding-001"
 BUCKET           = "scholar-sync-documents"
 SIGNED_URL_TTL   = 300          # seconds (5 minutes)
 HYDE_DELIMITER   = "_$_"        # separator Gemini uses between HyDE phrases
@@ -403,6 +403,103 @@ def download_document(document_id: str, current_user: dict = Depends(get_current
     return {"url": url, "expires_in": SIGNED_URL_TTL}
 
 
+# ── Search helpers ─────────────────────────────────────────────────────────────
+
+def _visible_group_result(grp: dict, user_id: str, university_id: str | None,
+                          similarity: float | None = None) -> dict | None:
+    """Build a result dict for a document group if the user can see it."""
+    scope = grp.get("scope")
+    grp_uni = grp.get("university_id")
+    visible = (
+        scope == "global"
+        or grp.get("created_by") == user_id
+        or (university_id and grp_uni == university_id)
+    )
+    if not visible:
+        return None
+
+    active_id = grp.get("active_document_id")
+    active_doc = {}
+    if active_id:
+        ad = supabase.table("documents").select("*") \
+            .eq("document_id", active_id).execute()
+        if ad.data:
+            active_doc = ad.data[0]
+
+    result = {
+        "group_id":          grp.get("doc_group_id"),
+        "title":             grp.get("title"),
+        "scope":             scope,
+        "human_description": active_doc.get("human_description"),
+        "ai_description":    grp.get("ai_description") or active_doc.get("ai_description"),
+        "status":            active_doc.get("status"),
+        "document_id":       active_id,
+        "is_active":         True,
+        "created_at":        active_doc.get("created_at"),
+    }
+    if similarity is not None:
+        result["similarity"] = similarity
+    return result
+
+
+def _text_search(query: str, user_id: str, university_id: str | None) -> list:
+    """
+    Text-based search: ILIKE on document_chunks.text_content and
+    document_groups.title / documents.human_description.
+    """
+    print(f"[SEARCH] Text search – query='{query}'")
+    seen: set = set()
+    results: list = []
+
+    # 1) Search in document_chunks text_content
+    try:
+        chunks_resp = supabase.table("document_chunks") \
+            .select("document_id") \
+            .ilike("text_content", f"%{query}%") \
+            .limit(50) \
+            .execute()
+
+        doc_ids = list({c["document_id"] for c in (chunks_resp.data or [])})
+        for doc_id in doc_ids:
+            doc_resp = supabase.table("documents").select("group_id") \
+                .eq("document_id", doc_id).execute()
+            if not doc_resp.data:
+                continue
+            gid = doc_resp.data[0]["group_id"]
+            if gid in seen:
+                continue
+            seen.add(gid)
+            grp_resp = supabase.table("document_groups").select("*") \
+                .eq("doc_group_id", gid).execute()
+            if grp_resp.data:
+                r = _visible_group_result(grp_resp.data[0], user_id, university_id)
+                if r:
+                    results.append(r)
+    except Exception as exc:
+        print(f"[SEARCH] Chunk text search error: {exc}")
+
+    # 2) Search in document_groups.title
+    try:
+        grp_resp = supabase.table("document_groups") \
+            .select("*") \
+            .ilike("title", f"%{query}%") \
+            .limit(20) \
+            .execute()
+        for grp in (grp_resp.data or []):
+            gid = grp.get("doc_group_id")
+            if gid in seen:
+                continue
+            seen.add(gid)
+            r = _visible_group_result(grp, user_id, university_id)
+            if r:
+                results.append(r)
+    except Exception as exc:
+        print(f"[SEARCH] Title text search error: {exc}")
+
+    print(f"[SEARCH] Text search returning {len(results)} results")
+    return results
+
+
 # ── HyDE Semantic Search ──────────────────────────────────────────────────────
 
 @router.post("/search-documents")
@@ -411,25 +508,33 @@ async def search_documents(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Hypothetical Document Embeddings (HyDE) search.
+    Multi-strategy document search.
 
-    1. Forward the query to Gemini and ask it to produce a few hypothetical
-       matching phrases/answers separated by  _$_ .
-    2. Embed each phrase.
-    3. Run a vector similarity search against the embeddings table.
-    4. Aggregate, deduplicate, and return the best matching document groups.
+    Accepts an optional ``mode`` field:
+      - ``"semantic"`` (default) – HyDE embedding search with text fallback.
+      - ``"text"``               – pure text / ILIKE search on chunks and titles.
+
+    The semantic mode automatically falls back to text search when embedding
+    fails (e.g. model unavailable or no embeddings stored yet).
     """
     query = (body.get("query") or "").strip()
     if not query:
         raise HTTPException(status_code=400, detail="Query must not be empty")
 
+    mode = (body.get("mode") or "semantic").strip().lower()
+
     user_id = current_user.get("id")
     profile = _get_profile(user_id)
     university_id = profile.get("university_id")
 
+    # ── Text-only mode ────────────────────────────────────────────────────────
+    if mode == "text":
+        return _text_search(query, user_id, university_id)
+
+    # ── Semantic (HyDE) mode with automatic text fallback ─────────────────────
     print(f"[SEARCH] HyDE search initiated – query='{query}'")
 
-    # ── Step 1: Gemini → hypothetical phrases ─────────────────────────────────
+    # Step 1: Gemini → hypothetical phrases
     hyde_prompt = (
         "You are a search engine assistant for an academic document repository. "
         "Given the following user query, generate 3 short hypothetical phrases or "
@@ -451,9 +556,10 @@ async def search_documents(
     if not phrases:
         phrases = [query]
 
-    # ── Step 2 & 3: Embed each phrase and collect matches ─────────────────────
+    # Step 2 & 3: Embed each phrase and collect matches
     seen_group_ids: set = set()
     results: list = []
+    embedding_failures = 0
 
     for phrase in phrases:
         print(f"[SEARCH] Embedding phrase: '{phrase[:80]}'")
@@ -461,6 +567,7 @@ async def search_documents(
             vector = _embed(phrase)
         except Exception as exc:
             print(f"[SEARCH] Embedding failed for phrase: {exc}")
+            embedding_failures += 1
             continue
 
         try:
@@ -475,48 +582,25 @@ async def search_documents(
                     continue
                 seen_group_ids.add(gid)
 
-                # Fetch document group info for display
                 grp_resp = supabase.table("document_groups").select("*") \
                     .eq("doc_group_id", gid).execute()
                 if not grp_resp.data:
                     continue
-                grp = grp_resp.data[0]
 
-                # Filter by visibility (same rules as documents-visible-to-user)
-                scope = grp.get("scope")
-                grp_uni = grp.get("university_id")
-                visible = (
-                    scope == "global"
-                    or grp.get("created_by") == user_id
-                    or (university_id and grp_uni == university_id)
+                r = _visible_group_result(
+                    grp_resp.data[0], user_id, university_id,
+                    similarity=match.get("similarity"),
                 )
-                if not visible:
-                    continue
-
-                # Grab active document for metadata
-                active_id = grp.get("active_document_id")
-                active_doc = {}
-                if active_id:
-                    ad = supabase.table("documents").select("*") \
-                        .eq("document_id", active_id).execute()
-                    if ad.data:
-                        active_doc = ad.data[0]
-
-                results.append({
-                    "group_id":          gid,
-                    "title":             grp.get("title"),
-                    "scope":             scope,
-                    "human_description": active_doc.get("human_description"),
-                    "ai_description":    grp.get("ai_description") or active_doc.get("ai_description"),
-                    "status":            active_doc.get("status"),
-                    "document_id":       active_id,
-                    "similarity":        match.get("similarity"),
-                    "is_active":         True,
-                    "created_at":        active_doc.get("created_at"),
-                })
+                if r:
+                    results.append(r)
 
         except Exception as exc:
             print(f"[SEARCH] Vector search failed: {exc}")
+
+    # Automatic text fallback when all embeddings failed or no results found
+    if not results and (embedding_failures == len(phrases) or not results):
+        print("[SEARCH] Semantic search yielded no results – falling back to text search")
+        results = _text_search(query, user_id, university_id)
 
     print(f"[SEARCH] Returning {len(results)} results")
     return results
