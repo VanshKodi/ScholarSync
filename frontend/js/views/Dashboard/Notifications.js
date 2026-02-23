@@ -204,7 +204,7 @@ export async function Notifications(container) {
 
   async function load() {
     try {
-      const notifs = await request("/notifications", { skipCache: true });
+      const notifs = await request("/notifications");
       renderList(notifs);
     } catch (e) {
       listEl.innerHTML = `<div class="notif-empty">Failed to load notifications.</div>`;

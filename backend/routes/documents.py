@@ -598,7 +598,7 @@ async def search_documents(
             print(f"[SEARCH] Vector search failed: {exc}")
 
     # Automatic text fallback when all embeddings failed or no results found
-    if not results and (embedding_failures == len(phrases) or not results):
+    if not results:
         print("[SEARCH] Semantic search yielded no results – falling back to text search")
         results = _text_search(query, user_id, university_id)
 
