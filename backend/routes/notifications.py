@@ -16,7 +16,7 @@ def get_notifications(current_user: dict = Depends(get_current_user)):
     resp = supabase.table("notifications") \
         .select("*") \
         .eq("user_id", user_id) \
-        .order("is_read") \
+        .order("is_read", desc=False) \
         .order("created_at", desc=True) \
         .limit(50) \
         .execute()

@@ -29,6 +29,7 @@ import { DocumentUpload } from "../../components/DocumentUpload.js";
 import { Overview } from "./Overview.js";
 import { Documents } from "./Documents.js";
 import { JoinRequests } from "./JoinRequests.js";
+import { Notifications } from "./Notifications.js";
 
 import { supabase } from "../../utils/supabase.js";
 import { request } from "../../api.js";
@@ -56,6 +57,11 @@ export default function Dashboard({ root }) {
 
     if (view === "join-requests") {
       JoinRequests(main);
+      return;
+    }
+
+    if (view === "notifications") {
+      Notifications(main);
       return;
     }
 
