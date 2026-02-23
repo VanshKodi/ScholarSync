@@ -121,7 +121,7 @@ if (!document.getElementById("joinrequests-styles")) {
   document.head.appendChild(style);
 }
 
-import { request } from "../../api.js";
+import { request, clearCache } from "../../api.js";
 
 export function JoinRequests(container) {
   const wrapper = document.createElement("div");
@@ -133,7 +133,12 @@ export function JoinRequests(container) {
   const title = document.createElement("h2");
   title.textContent = "Manage Join Requests";
 
-  header.appendChild(title);
+  const refreshBtn = document.createElement("button");
+  refreshBtn.className = "btn";
+  refreshBtn.style.cssText = "background:#f3f4f6;color:#374151;font-size:0.85rem;display:inline-flex;align-items:center;gap:4px;";
+  refreshBtn.textContent = "↻ Refresh";
+
+  header.append(title, refreshBtn);
 
   const card = document.createElement("div");
   card.className = "join-requests-card";
@@ -241,6 +246,12 @@ export function JoinRequests(container) {
       <div class="error-banner">${message}</div>
     `;
   }
+
+  refreshBtn.addEventListener("click", () => {
+    clearCache("/all-join-requests");
+    clearCache("/get-user-profile");
+    loadAndRender();
+  });
 
   loadAndRender();
 }

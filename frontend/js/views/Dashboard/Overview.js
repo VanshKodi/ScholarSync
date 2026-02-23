@@ -1,5 +1,5 @@
 import { supabase } from "../../utils/supabase.js";
-import { Session, request } from "../../api.js";
+import { Session, request, clearCache } from "../../api.js";
 
 /* ======================
    Styles
@@ -74,6 +74,25 @@ const overviewCSS = `
     background: #e5e7eb;
   }
 
+  .refresh-btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: none;
+    background: #f3f4f6;
+    color: #374151;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .refresh-btn:hover {
+    background: #e5e7eb;
+  }
+
   .input-group {
     margin-top: 18px;
     display: flex;
@@ -143,7 +162,10 @@ function renderProfile(container, user, profile) {
   container.innerHTML = `
     <div class="overview-view">
       <div class="overview-card">
-        <h1>Profile Overview</h1>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <h1 style="margin:0;">Profile Overview</h1>
+          <button id="refreshOverviewBtn" class="refresh-btn">↻ Refresh</button>
+        </div>
 
         <div class="profile-info">
           <p><b>Email:</b> ${user.email}</p>
@@ -174,6 +196,11 @@ function renderProfile(container, user, profile) {
 function attachHandlers(container, user) {
   const dynamicInput = container.querySelector("#dynamicInput");
   const messageBox = container.querySelector("#messageBox");
+
+  container.querySelector("#refreshOverviewBtn").addEventListener("click", async () => {
+    clearCache();
+    await Overview(container);
+  });
 
   function showMessage(msg, type = "success") {
     messageBox.innerHTML = `

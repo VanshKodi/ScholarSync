@@ -37,7 +37,7 @@ POLL_INTERVAL = 30          # seconds between each poll cycle
 # for typical academic paragraphs; tune via env vars if needed.
 CHUNK_SIZE    = 500         # target characters per chunk
 CHUNK_OVERLAP = 50          # character overlap between consecutive chunks
-EMBED_MODEL   = "text-embedding-004"
+EMBED_MODEL   = "gemini-embedding-001"
 GEN_MODEL     = "gemini-2.0-flash"
 STORAGE_BUCKET = "scholar-sync-documents"
 

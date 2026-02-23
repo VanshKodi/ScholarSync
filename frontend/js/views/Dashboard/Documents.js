@@ -1,4 +1,4 @@
-import { request } from "../../api.js";
+import { request, clearCache } from "../../api.js";
 
 /* ======================
    Documents UI
@@ -695,10 +695,14 @@ export function Documents(container) {
     </div>
 
     <div class="documents-header">
-      <h2>Documents</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <h2>Documents</h2>
+        <button id="refreshDocsBtn" style="padding:8px 14px;border-radius:8px;border:none;background:#f3f4f6;color:#374151;font-size:0.85rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">↻ Refresh</button>
+      </div>
       <div class="search-bar">
         <input type="text" id="docSearchInput" placeholder="Search documents…" />
         <button id="semanticSearchBtn" class="semantic-btn" title="Semantic (AI) search">🔍 AI Search</button>
+        <button id="textSearchBtn" title="Text search on document content" style="padding:10px 14px;border-radius:8px;border:none;cursor:pointer;background:#059669;color:white;font-weight:500;">🔎 Text Search</button>
         <label class="advanced-toggle">
           <input type="checkbox" id="advancedToggle" />
           Advanced
@@ -781,6 +785,8 @@ export function Documents(container) {
 
   const searchInput           = card.querySelector("#docSearchInput");
   const semanticSearchBtn     = card.querySelector("#semanticSearchBtn");
+  const textSearchBtn         = card.querySelector("#textSearchBtn");
+  const refreshDocsBtn        = card.querySelector("#refreshDocsBtn");
   const advancedToggle        = card.querySelector("#advancedToggle");
   const advancedFilters       = card.querySelector("#advancedFilters");
   const onlyActiveFilter      = card.querySelector("#onlyActiveFilter");
@@ -1162,7 +1168,7 @@ export function Documents(container) {
     try {
       const results = await request("/search-documents", {
         method: "POST",
-        body:   { query },
+        body:   { query, mode: "semantic" },
       });
 
       const data = Array.isArray(results) ? results : [];
@@ -1179,12 +1185,50 @@ export function Documents(container) {
     }
   }
 
+  /* ======================
+     Text Search
+  ====================== */
+
+  async function performTextSearch() {
+    const query = searchInput.value.trim();
+    if (!query) { performSearch(); return; }
+
+    const origText       = textSearchBtn.textContent;
+    textSearchBtn.textContent = "Searching…";
+    textSearchBtn.disabled    = true;
+
+    try {
+      const results = await request("/search-documents", {
+        method: "POST",
+        body:   { query, mode: "text" },
+      });
+
+      const data = Array.isArray(results) ? results : [];
+      globalDocs = data.filter(d => d.scope === "global");
+      localDocs  = data.filter(d => d.scope === "local");
+      performSearch();
+    } catch (err) {
+      console.error("Text search failed", err);
+      alert("Text search failed.");
+      performSearch();
+    } finally {
+      textSearchBtn.textContent = origText;
+      textSearchBtn.disabled    = false;
+    }
+  }
+
   searchInput.addEventListener("input", performSearch);
 
   semanticSearchBtn.addEventListener("click", performSemanticSearch);
+  textSearchBtn.addEventListener("click", performTextSearch);
 
   searchInput.addEventListener("keydown", e => {
     if (e.key === "Enter") performSemanticSearch();
+  });
+
+  refreshDocsBtn.addEventListener("click", async () => {
+    clearCache("/documents-visible-to-user");
+    await loadDocuments();
   });
 
   advancedToggle.addEventListener("change", () => {

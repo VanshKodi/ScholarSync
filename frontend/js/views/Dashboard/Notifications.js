@@ -1,4 +1,4 @@
-import { request } from "../../api.js";
+import { request, clearCache } from "../../api.js";
 
 /* ======================
    Styles
@@ -28,6 +28,31 @@ const notifCSS = `
     font-size: 1.6rem;
     color: #1f2937;
     margin: 0;
+  }
+
+  .notif-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .refresh-btn {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: none;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .refresh-btn:hover {
+    background: #e5e7eb;
   }
 
   .notif-mark-all-btn {
@@ -161,7 +186,10 @@ export async function Notifications(container) {
       <div class="notifications-card">
         <div class="notifications-header">
           <h2>Notifications</h2>
-          <button class="notif-mark-all-btn" id="markAllBtn">Mark all as read</button>
+          <div class="notif-header-actions">
+            <button class="refresh-btn" id="refreshNotifBtn">↻ Refresh</button>
+            <button class="notif-mark-all-btn" id="markAllBtn">Mark all as read</button>
+          </div>
         </div>
         <div id="notifList" class="notif-list">
           <div class="notif-loading">Loading…</div>
@@ -170,8 +198,9 @@ export async function Notifications(container) {
     </div>
   `;
 
-  const listEl  = container.querySelector("#notifList");
-  const markAll = container.querySelector("#markAllBtn");
+  const listEl     = container.querySelector("#notifList");
+  const markAll    = container.querySelector("#markAllBtn");
+  const refreshBtn = container.querySelector("#refreshNotifBtn");
 
   async function load() {
     try {
@@ -230,6 +259,12 @@ export async function Notifications(container) {
       listEl.appendChild(item);
     }
   }
+
+  refreshBtn.addEventListener("click", async () => {
+    clearCache("/notifications");
+    listEl.innerHTML = `<div class="notif-loading">Refreshing…</div>`;
+    await load();
+  });
 
   markAll.addEventListener("click", async () => {
     try {
