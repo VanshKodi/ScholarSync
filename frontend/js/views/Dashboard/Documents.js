@@ -1,4 +1,4 @@
-import { request, clearCache } from "../../api.js";
+import { request } from "../../api.js";
 
 /* ======================
    Documents UI
@@ -1227,8 +1227,11 @@ export function Documents(container) {
   });
 
   refreshDocsBtn.addEventListener("click", async () => {
-    clearCache("/documents-visible-to-user");
+    refreshDocsBtn.textContent = "↻ Loading…";
+    refreshDocsBtn.disabled = true;
     await loadDocuments();
+    refreshDocsBtn.textContent = "↻ Refresh";
+    refreshDocsBtn.disabled = false;
   });
 
   advancedToggle.addEventListener("change", () => {

@@ -1,5 +1,5 @@
 import { supabase } from "../../utils/supabase.js";
-import { Session, request, clearCache } from "../../api.js";
+import { Session, request } from "../../api.js";
 
 /* ======================
    Styles
@@ -198,8 +198,19 @@ function attachHandlers(container, user) {
   const messageBox = container.querySelector("#messageBox");
 
   container.querySelector("#refreshOverviewBtn").addEventListener("click", async () => {
-    clearCache();
-    await Overview(container);
+    const btn = container.querySelector("#refreshOverviewBtn");
+    btn.textContent = "↻ Loading…";
+    btn.disabled = true;
+    try {
+      await Overview(container);
+    } finally {
+      // Button is re-rendered by Overview(), but reset here as a safety fallback
+      const newBtn = container.querySelector("#refreshOverviewBtn");
+      if (newBtn) {
+        newBtn.textContent = "↻ Refresh";
+        newBtn.disabled = false;
+      }
+    }
   });
 
   function showMessage(msg, type = "success") {

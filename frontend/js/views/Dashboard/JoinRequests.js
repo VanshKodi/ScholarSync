@@ -121,7 +121,7 @@ if (!document.getElementById("joinrequests-styles")) {
   document.head.appendChild(style);
 }
 
-import { request, clearCache } from "../../api.js";
+import { request } from "../../api.js";
 
 export function JoinRequests(container) {
   const wrapper = document.createElement("div");
@@ -248,9 +248,12 @@ export function JoinRequests(container) {
   }
 
   refreshBtn.addEventListener("click", () => {
-    clearCache("/all-join-requests");
-    clearCache("/get-user-profile");
-    loadAndRender();
+    refreshBtn.textContent = "↻ Loading…";
+    refreshBtn.disabled = true;
+    loadAndRender().finally(() => {
+      refreshBtn.textContent = "↻ Refresh";
+      refreshBtn.disabled = false;
+    });
   });
 
   loadAndRender();

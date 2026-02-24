@@ -1,640 +1,378 @@
-# ScholarSync Developer Guide
+# ScholarSync — Developer Guide
 
-A step-by-step guide for adding new functionality to the ScholarSync codebase.
+> Intended for humans. Read this before adding features, endpoints, or pages.
 
-## Project Structure Overview
+---
+
+## Table of Contents
+
+1. [Project Structure](#project-structure)
+2. [Tech Stack & Key Libraries](#tech-stack--key-libraries)
+3. [Running Locally](#running-locally)
+4. [Backend: Add an Endpoint](#backend-add-an-endpoint)
+5. [Frontend: Call an API](#frontend-call-an-api)
+6. [Frontend: Add a New Page (Route)](#frontend-add-a-new-page-route)
+7. [Frontend: Add a Dashboard Sub-View](#frontend-add-a-dashboard-sub-view)
+8. [Frontend: Add a Reusable Component](#frontend-add-a-reusable-component)
+9. [Authentication Flow](#authentication-flow)
+10. [Loading States & Refresh Buttons](#loading-states--refresh-buttons)
+11. [Common Pitfalls](#common-pitfalls)
+12. [Deployment Checklist](#deployment-checklist)
+
+---
+
+## Project Structure
 
 ```
-scholarsync-backup/
-├── backend/               # FastAPI server
-│   ├── main.py           # App entry point, router registration, CORS config
-│   ├── config/           # Configuration modules
-│   │   ├── auth.py       # JWT token verification, get_current_user dependency
-│   │   ├── supabase.py   # Supabase client initialization
-│   │   └── gemini.py     # Gemini AI client
-│   ├── routes/           # API endpoint definitions
-│   │   ├── database.py   # University/join request endpoints
-│   │   ├── join_requests.py # Join request approval/rejection
-│   │   └── services/     # Business logic layer
-│   │       ├── university_service.py
-│   │       └── join_service.py
-│   └── sql/              # Database schema files
+ScholarSync/
+├── backend/                    # FastAPI server
+│   ├── main.py                 # App entry point; registers routers & CORS
+│   ├── config/
+│   │   ├── auth.py             # JWT verification, get_current_user dependency
+│   │   ├── supabase.py         # Supabase admin client (service role)
+│   │   └── gemini.py           # Google Gemini AI client
+│   ├── routes/
+│   │   ├── database.py         # University / join-request endpoints
+│   │   ├── documents.py        # Document upload, search, versioning
+│   │   └── notifications.py    # Notification read/list endpoints
+│   ├── services/
+│   │   ├── university_service.py
+│   │   └── join_service.py
+│   └── workers/
+│       └── processor.py        # Background document-processing worker
 │
-└── frontend/             # Vanilla JS frontend
-    ├── index.html        # App shell (loads JS files in order)
-    ├── css/              # Styles
-    ├── js/
-    │   ├── 1_config.js   # Global config first
-    │   ├── 2_app.js      # App initialization, session setup
-    │   ├── 3_router.js   # Hash-based routing setup
-    │   ├── api.js        # API client with auto token injection
-    │   ├── components/   # Reusable UI components
-    │   │   ├── Navbar.js
-    │   │   ├── Sidebar.js
-    │   │   └── ...
-    │   ├── utils/
-    │   │   ├── auth.js   # Authentication helpers
-    │   │   └── supabase.js
-    │   └── views/        # Page components
-    │       ├── Landing.js
-    │       ├── Login.js
-    │       └── Dashboard/
-    │           ├── Dashboard.js (main layout)
-    │           ├── Overview.js
-    │           ├── Documents.js
-    │           └── ...
-    └── resources/        # Static files (icons, fonts)
+└── frontend/                   # Vanilla JS SPA (no build step)
+    ├── index.html              # App shell; loads JS in order
+    ├── css/base.css
+    └── js/
+        ├── 1_config.js         # window.__ENV__ (must load first)
+        ├── 2_app.js            # Session bootstrap, OAuth hash handling
+        ├── 3_router.js         # Hash-based router
+        ├── api.js              # fetch wrapper with auto JWT injection
+        ├── components/
+        │   ├── Loader.js       # Global full-screen spinner
+        │   ├── Navbar.js
+        │   └── Sidebar.js      # Collapsible sidebar with notification badge
+        ├── utils/
+        │   ├── auth.js         # loginWithGoogle, logout, isAuthenticated
+        │   └── supabase.js     # Supabase JS browser client
+        └── views/
+            ├── Landing.js
+            ├── Login.js
+            └── Dashboard/
+                ├── Dashboard.js    # Layout shell (Navbar + Sidebar + main)
+                ├── Overview.js     # Profile overview
+                ├── Documents.js    # Document list, upload, search
+                ├── JoinRequests.js # Admin: approve/reject join requests
+                └── Notifications.js
 ```
 
-### Key Patterns
+---
+
+## Tech Stack & Key Libraries
+
+| Layer | Technology | Docs |
+|---|---|---|
+| Backend framework | **FastAPI** | https://fastapi.tiangolo.com |
+| Backend server | **Uvicorn** | https://www.uvicorn.org |
+| Database & Auth | **Supabase** (Postgres + Auth) | https://supabase.com/docs |
+| Supabase Python client | `supabase-py` | https://supabase.com/docs/reference/python/introduction |
+| Supabase JS client | `@supabase/supabase-js` (via CDN) | https://supabase.com/docs/reference/javascript/introduction |
+| AI embeddings & generation | **Google Gemini** (`google-genai`) | https://ai.google.dev/gemini-api/docs |
+| PDF parsing | `pypdf` | https://pypdf.readthedocs.io |
+| DOCX parsing | `python-docx` | https://python-docx.readthedocs.io |
+| Frontend routing | **Hash-based routing** (History API) | https://developer.mozilla.org/en-US/docs/Web/API/History_API |
+| Frontend HTTP client | Native `fetch` (wrapped in `api.js`) | https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API |
+| Deployment tunnel | **Cloudflare Tunnel** | https://developers.cloudflare.com/cloudflare-one/connections/connect-networks |
+
+---
+
+## Running Locally
 
 **Backend:**
-- **Routers:** Each route file is registered in `main.py` with `app.include_router()`
-- **Authentication:** All protected routes use `Depends(get_current_user)` dependency injection
-- **Services:** Business logic lives in `services/`, routes call service functions
-- **Database:** All DB queries use Supabase REST API via `supabase.table()` calls
+```bash
+cd backend
+cp .env.example .env          # fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+pip install -r requirements.txt
+uvicorn main:app --reload     # runs on http://localhost:8000
+```
 
 **Frontend:**
-- **Routing:** Hash-based router in `3_router.js` matches paths to view handlers
-- **Components:** Vanilla JS functions that return DOM elements (no JSX)
-- **API:** `api.js` provides `request()` function that auto-injects JWT token
-- **Views:** Components in `views/` folder that render to the DOM
-- **Sidebar:** Dashboard views use Sidebar component to switch sub-views
+```bash
+cd frontend
+# Any static server works; e.g.:
+npx serve .                   # or python -m http.server 5500
+```
+
+Set `API_BASE` in `frontend/js/1_config.js` to `http://localhost:8000` for local development.
 
 ---
 
-## How to Add Functionality
+## Backend: Add an Endpoint
 
-### 1. Add a New Backend API Endpoint
+### Step 1 — Write the route
 
-**Example:** Create `GET /university-join-requests/:id` to fetch join requests for a university
-
-**Step 1:** Add endpoint to `backend/routes/database.py`
+Add to an existing router file (e.g. `backend/routes/database.py`) or create a new file:
 
 ```python
-@router.get("/university-join-requests/{university_id}")
-async def get_university_join_requests(university_id: str, user: dict = Depends(get_current_user)):
-    # Verify user is admin of this university
-    profile = supabase.table("profiles").select("role, university_id").eq("id", user.get("id")).single().execute()
-    
-    if not profile.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    
-    if profile.data["role"] != "admin" or profile.data["university_id"] != university_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    # Fetch join requests
-    return supabase.table("university_join_requests").select("*").eq("university_id", university_id).order("request_id", desc=True).execute().data or []
+from fastapi import APIRouter, Depends, HTTPException
+from config.supabase import supabase
+from config.auth import get_current_user
+
+router = APIRouter()
+
+@router.get("/my-new-endpoint")
+def my_new_endpoint(current_user: dict = Depends(get_current_user)):
+    user_id = current_user.get("id")
+    resp = supabase.table("some_table").select("*").eq("user_id", user_id).execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Not found")
+    return resp.data
 ```
 
-**Step 2 (optional):** If business logic is complex, create a service function in `backend/services/university_service.py`
+`Depends(get_current_user)` — validates the `Authorization: Bearer <token>` header automatically. All protected routes must include it.
 
+### Step 2 — Register the router (only for new files)
+
+In `backend/main.py`:
 ```python
-def get_join_requests_for_university(university_id: str, user_id: str):
-    # Verify admin access
-    profile = supabase.table("profiles").select("role, university_id").eq("id", user_id).single().execute()
-    
-    if not profile.data or profile.data["role"] != "admin" or profile.data["university_id"] != university_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    return supabase.table("university_join_requests").select("*").eq("university_id", university_id).order("request_id", desc=True).execute().data
+from routes.my_new_module import router as my_router
+app.include_router(my_router)
 ```
 
-Then call it from the route:
-```python
-@router.get("/university-join-requests/{university_id}")
-async def get_university_join_requests(university_id: str, user: dict = Depends(get_current_user)):
-    return get_join_requests_for_university(university_id, user.get("id"))
+Existing router files (`database.py`, `documents.py`, `notifications.py`) are already registered — no extra step needed.
+
+### Step 3 — Restart the server
+```bash
+uvicorn main:app --reload
 ```
-
-**Step 3:** Restart backend with `uvicorn main:app --reload`
-
-**Important:** All routes are automatically included in `main.py` - no registration needed if file already exists.
 
 ---
 
-### 2. Add a New Frontend API Call
+## Frontend: Call an API
 
-**Example:** Create `getUniversityJoinRequests(id)` function
-
-**Step 1:** Add to `frontend/js/api.js`
-
-```javascript
-export async function getUniversityJoinRequests(universityId) {
-  return request(`/university-join-requests/${universityId}`, {
-    method: "GET"
-  });
-}
-```
-
-**Step 2:** Import and use in a view
-
-```javascript
-import { getUniversityJoinRequests } from "../../api.js";
-
-export function MyViewComponent(container) {
-  async function loadRequests() {
-    try {
-      const requests = await getUniversityJoinRequests("some-id");
-      console.log(requests);
-      // Render to DOM
-    } catch (error) {
-      console.error("Failed to load requests:", error);
-    }
-  }
-  
-  loadRequests();
-}
-```
-
-**Key:** The `request()` function automatically:
-- Injects the JWT token from `Session.get()`
-- Sets `Authorization: Bearer <token>` header
-- Parses JSON response
-- Throws error if response is not OK
-
----
-
-### 3. Add a UI Button That Calls an API
-
-**Example:** Add a button in Dashboard that approves a join request
-
-**Step 1:** Create or edit a view component (e.g., `frontend/js/views/Dashboard/JoinRequests.js`)
+All HTTP calls go through `request()` in `frontend/js/api.js`. It automatically injects the JWT token.
 
 ```javascript
 import { request } from "../../api.js";
 
-export function JoinRequests(container) {
-  const section = document.createElement("div");
-  section.className = "join-requests-section";
-  
-  // Fetch and display requests
-  async function loadAndRender() {
-    const requests = await request("/university-join-requests/uni-123", { method: "GET" });
-    
-    const list = document.createElement("div");
-    requests.forEach(req => {
-      const item = document.createElement("div");
-      item.className = "request-item";
-      
-      const btnContainer = document.createElement("div");
-      
-      // Approve button
-      const approveBtn = document.createElement("button");
-      approveBtn.textContent = "Approve";
-      approveBtn.onclick = async () => {
-        try {
-          await request("/handle-join-request", {
-            method: "POST",
-            body: { request_id: req.request_id, action: "accept" }
-          });
-          loadAndRender(); // Refresh list
-        } catch (error) {
-          alert("Error approving request: " + error);
-        }
-      };
-      
-      btnContainer.appendChild(approveBtn);
-      item.append(document.createTextNode(req.requester_id), btnContainer);
-      list.appendChild(item);
-    });
-    
-    section.innerHTML = "";
-    section.appendChild(list);
-  }
-  
-  loadAndRender();
-  container.appendChild(section);
-}
+// GET
+const data = await request("/my-new-endpoint");
+
+// POST with JSON body
+await request("/create-something", {
+  method: "POST",
+  body: { name: "hello" }          // serialised to JSON automatically
+});
+
+// POST with FormData (file upload)
+const form = new FormData();
+form.append("file", fileInput.files[0]);
+await request("/upload", { method: "POST", body: form });
 ```
 
-**Step 2:** Import and call this component from Dashboard
-
+Always wrap in `try/catch`:
 ```javascript
-import { JoinRequests } from "./JoinRequests.js";
-
-export default function Dashboard({ root }) {
-  // ... existing code ...
-  
-  function render(view) {
-    main.innerHTML = "";
-    
-    if (view === "join-requests") {
-      JoinRequests(main);
-      return;
-    }
-    
-    Overview(main);
-  }
-  
-  const sidebar = Sidebar({ onSelect: render });
-  // ...
+try {
+  const result = await request("/my-new-endpoint");
+  renderResult(result);
+} catch (err) {
+  showError(err.message);
 }
 ```
-
-**Key:** Always use `await request()` and wrap in try/catch for error handling.
 
 ---
 
-### 4. Add a New Page and Configure Routing
+## Frontend: Add a New Page (Route)
 
-**Example:** Create a new "Reports" page
+### Step 1 — Create the view
 
-**Step 1:** Create the view component at `frontend/js/views/Reports.js`
-
+`frontend/js/views/Reports.js`:
 ```javascript
+import Navbar from "../components/Navbar.js";
+
 export default function Reports({ root }) {
   root.innerHTML = "";
-  
-  const navbar = Navbar();
-  const content = document.createElement("div");
-  content.className = "reports-page";
-  content.innerHTML = `
-    <h1>Reports</h1>
-    <p>Reports content here</p>
-  `;
-  
-  root.append(navbar, content);
+  root.append(Navbar(), buildContent());
+}
+
+function buildContent() {
+  const el = document.createElement("div");
+  el.innerHTML = "<h1>Reports</h1>";
+  return el;
 }
 ```
 
-**Step 2:** Register route in `frontend/js/3_router.js`
+### Step 2 — Register the route
 
+`frontend/js/3_router.js`:
 ```javascript
 import Reports from "./views/Reports.js";
 
 routes.push({
   match: path => path === "/reports",
-  handler: ({ root }) => {
-    Reports({ root });
-  }
+  handler: ({ root }) => Reports({ root })
 });
 ```
 
-**Step 3:** Test by navigating in browser: `/#/reports`
+### Step 3 — Navigate to it
 
-**Important:** 
-- Routes are matched by hash, not actual URL paths
-- Always include exact path matching (e.g., `path === "/reports"`)
-- Each route handler receives `{ root, path }` object
-- `root` is the HTML element where content should be rendered
+```javascript
+window.location.hash = "#/reports";
+```
+
+The router listens to `hashchange` events and matches `window.location.hash.slice(1)` against each route's `match` function.
 
 ---
 
-### 5. Add Navigation to Navbar or Sidebar
+## Frontend: Add a Dashboard Sub-View
 
-**Example:** Add "Reports" link to Sidebar
+Dashboard sub-views live inside `frontend/js/views/Dashboard/` and are rendered inside the existing `<main>` element (no Navbar/Sidebar needed).
 
-**Step 1:** Edit `frontend/js/components/Sidebar.js`
+### Step 1 — Create the sub-view
 
-Sidebar uses the `item(icon, text, id)` function. Each item calls `onSelect(id)` when clicked. The Dashboard component handles the `onSelect` callback:
-
+`frontend/js/views/Dashboard/MyFeature.js`:
 ```javascript
-export default function Sidebar({ onSelect }) {
-  // ... existing code ...
-  
-  nav.append(
-    item("📊", "Overview", "overview"),
-    
-    section("Academic"),
-    item("📄", "Reports", "reports"),  // Add this line
-    // ... rest of items
-  );
-  
-  // ...
-}
-```
-
-**Step 2:** Handle the selection in Dashboard.js
-
-```javascript
-export default function Dashboard({ root }) {
-  // ... existing code ...
-  
-  function render(view) {
-    main.innerHTML = "";
-    
-    if (view === "documents") {
-      Documents(main);
-      return;
-    }
-    
-    if (view === "reports") {
-      Reports(main);  // Add this
-      return;
-    }
-    
-    Overview(main);
-  }
-  
-  const sidebar = Sidebar({ onSelect: render });
-  // ...
-}
-```
-
-**Step 3:** Import the Reports component
-
-```javascript
-import { Reports } from "./Reports.js";
-```
-
-**For Navbar:** Edit `frontend/js/components/Navbar.js` to add buttons
-
-```javascript
-nav.innerHTML = `
-  <div class="nav-left">
-    <!-- ... existing ... -->
-  </div>
-  
-  <div class="nav-right">
-    ${isAuth ? `
-      <button class="nav-btn" id="reportsBtn">Reports</button>
-      <button class="nav-btn" id="dashboardBtn">Dashboard</button>
-      <button class="nav-btn outline" id="logoutBtn">Logout</button>
-    ` : `
-      <button class="nav-btn primary" id="getStartedBtn">Get Started</button>
-    `}
-  </div>
-`;
-
-if (isAuth) {
-  nav.querySelector("#reportsBtn").onclick = () => {
-    window.location.hash = "#/reports";
-  };
-  // ... existing handlers ...
-}
-```
-
----
-
-### 6. Add New Content Blocks/Components to Existing Pages
-
-**Example:** Add a statistics card component to Dashboard Overview
-
-**Step 1:** Create a component at `frontend/js/components/StatCard.js`
-
-```javascript
-export function StatCard({ title, value, icon }) {
-  const card = document.createElement("div");
-  card.className = "stat-card";
-  card.innerHTML = `
-    <div class="stat-icon">${icon}</div>
-    <div class="stat-content">
-      <div class="stat-title">${title}</div>
-      <div class="stat-value">${value}</div>
-    </div>
-  `;
-  return card;
-}
-```
-
-**Step 2:** Import and use in `frontend/js/views/Dashboard/Overview.js`
-
-```javascript
-import { StatCard } from "../../components/StatCard.js";
 import { request } from "../../api.js";
 
-export function Overview(container) {
-  container.innerHTML = "";
-  
-  const overview = document.createElement("div");
-  overview.className = "overview";
-  
-  // Fetch data
-  request("/some-stats", { method: "GET" }).then(data => {
-    const statsContainer = document.createElement("div");
-    statsContainer.className = "stats-grid";
-    
-    statsContainer.appendChild(StatCard({
-      title: "Documents",
-      value: data.documentCount,
-      icon: "📄"
-    }));
-    
-    statsContainer.appendChild(StatCard({
-      title: "Universities",
-      value: data.universityCount,
-      icon: "🏫"
-    }));
-    
-    overview.appendChild(statsContainer);
-  });
-  
-  container.appendChild(overview);
+export function MyFeature(container) {
+  container.innerHTML = `<div class="my-feature"><p>Loading…</p></div>`;
+
+  async function load() {
+    try {
+      const data = await request("/my-new-endpoint");
+      render(data);
+    } catch (err) {
+      container.innerHTML = `<p>Error: ${err.message}</p>`;
+    }
+  }
+
+  function render(data) {
+    container.querySelector(".my-feature").textContent = JSON.stringify(data);
+  }
+
+  load();
 }
 ```
 
-**Step 3:** Add CSS to `frontend/css/views/views.css`
+### Step 2 — Add a Sidebar entry
 
-```css
-.stat-card {
-  display: flex;
-  align-items: center;
-  padding: 1rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: white;
-}
+`frontend/js/components/Sidebar.js` — inside `nav.append(...)`:
+```javascript
+item(icons.document, "My Feature", "my-feature"),
+```
 
-.stat-icon {
-  font-size: 2rem;
-  margin-right: 1rem;
-}
+### Step 3 — Handle the route in Dashboard
 
-.stat-title {
-  font-size: 0.875rem;
-  color: #666;
-}
+`frontend/js/views/Dashboard/Dashboard.js`:
+```javascript
+import { MyFeature } from "./MyFeature.js";
 
-.stat-value {
-  font-size: 1.5rem;
-  font-weight: bold;
+// inside render():
+if (view === "my-feature") {
+  MyFeature(main);
+  return;
 }
+```
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+---
+
+## Frontend: Add a Reusable Component
+
+Components return a DOM element (no framework, no JSX).
+
+`frontend/js/components/StatusBadge.js`:
+```javascript
+export function StatusBadge(status) {
+  const badge = document.createElement("span");
+  badge.className = `status-badge status-${status}`;
+  badge.textContent = status;
+  return badge;
 }
+```
+
+Use it anywhere:
+```javascript
+import { StatusBadge } from "../../components/StatusBadge.js";
+container.appendChild(StatusBadge("active"));
+```
+
+---
+
+## Authentication Flow
+
+```
+User clicks "Login with Google"
+  → loginWithGoogle()  (frontend/js/utils/auth.js)
+  → supabase.auth.signInWithOAuth({ provider: "google" })
+  → Google OAuth redirect → back to app with #access_token=... in URL hash
+  → 2_app.js parses hash, calls supabase.auth.setSession()
+  → Session.onChange fires → router pushes to #/dashboard
+```
+
+**Session object** (`Session` in `api.js`):
+- `Session.get()` — returns the current session (caches in memory until auth state changes)
+- `Session.onChange(cb)` — fires whenever auth state changes (login/logout)
+
+**Backend token validation** (`backend/config/auth.py`):
+- `get_current_user` calls Supabase's `/auth/v1/user` endpoint with the bearer token
+- Returns the user dict (`{ "id": "...", "email": "...", ... }`)
+
+---
+
+## Loading States & Refresh Buttons
+
+All data-fetching views show a loading indicator while fetching and disable the Refresh button to prevent duplicate requests:
+
+```javascript
+refreshBtn.addEventListener("click", async () => {
+  refreshBtn.textContent = "↻ Loading…";
+  refreshBtn.disabled = true;
+  await loadData();
+  refreshBtn.textContent = "↻ Refresh";
+  refreshBtn.disabled = false;
+});
+```
+
+For a full-screen spinner (used during app boot), use the global `Loader`:
+
+```javascript
+import { showLoader, hideLoader } from "./components/Loader.js";
+
+showLoader("Fetching data…");
+await doSomethingAsync();
+hideLoader();
 ```
 
 ---
 
 ## Common Pitfalls
 
-### 1. CORS Errors
-**Problem:** `Cross-Origin Request Blocked`
+### CORS error
+Add your dev origin to `allow_origins` in `backend/main.py`, or set `EXTRA_CORS_ORIGINS=http://localhost:5500` in your `.env`.
 
-**Cause:** Frontend URL not whitelisted in backend CORS config
+### 401 Unauthorized
+- Token missing or expired → call `Session.get()` and check it returns a non-null session.
+- Wrong `Authorization` header format → must be `Bearer <token>`.
 
-**Fix:** Add your frontend URL to `backend/main.py`:
-```python
-allow_origins=[
-    "http://localhost:5500",  # Add your dev server URL
-    "https://api.vanshkodi.in",
-    # ... existing origins
-]
-```
+### Route not working
+Make sure the `match` function in `3_router.js` matches the exact hash path (e.g. `"/reports"`, not `"#/reports"`).
 
-### 2. "Bearer token invalid" or 401 errors
-**Problem:** API returns 401 Unauthorized
+### Supabase query returning empty `data`
+Check RLS (Row Level Security) policies on the table. The service-role key used by the backend bypasses RLS; the anon key used by the frontend does not.
 
-**Cause:** 
-- Token expired or missing
-- `Authorization` header not sent correctly
-
-**Debug:** 
-- Check browser DevTools Network tab - should see `Authorization: Bearer <token>` header
-- Call `Session.get()` to verify token exists
-- Verify Supabase JWT_SECRET is correct
-
-### 3. API_BASE URL mismatch
-**Problem:** API calls go to wrong URL or fail
-
-**Cause:** `API_BASE` in `frontend/js/api.js` doesn't match backend URL
-
-**Fix:** Update `api.js` based on environment:
-```javascript
-const API_BASE = process.env.NODE_ENV === "production" 
-  ? "https://api.vanshkodi.in"
-  : "http://localhost:8000";
-```
-
-For dev: Use Cloudflare tunnel URL or localhost:8000
-
-### 4. Routing not working (hash navigation)
-**Problem:** `#/newpage` doesn't navigate anywhere
-
-**Cause:** Route not registered in `3_router.js`
-
-**Fix:** Ensure route is added:
-```javascript
-routes.push({
-  match: path => path === "/newpage",
-  handler: ({ root }) => {
-    MyNewPage({ root });
-  }
-});
-```
-
-### 5. Authentication state lost on page reload
-**Problem:** User logged out after refresh
-
-**Cause:** `Session` cache not initialized or Supabase session lost
-
-**Fix:** Ensure `2_app.js` runs first (index.html load order) and `Session.get()` is called:
-```javascript
-const session = await Session.get();
-if (!session) window.location.hash = "#/";
-```
-
-### 6. Sidebar/Navbar not updating after auth change
-**Problem:** Buttons don't reflect login state
-
-**Cause:** Component doesn't call `onAuthChange` callback
-
-**Fix:** Register auth change listener in component:
-```javascript
-import { onAuthChange } from "../utils/auth.js";
-
-onAuthChange(() => {
-  render(); // Re-render component
-});
-```
-
-### 7. Service layer queries failing silently
-**Problem:** Backend endpoint returns empty data or 500 error
-
-**Cause:** Supabase query error not caught
-
-**Fix:** Add error handling:
-```python
-try:
-    result = supabase.table("users").select("*").execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="No data found")
-    return result.data
-except Exception as e:
-    raise HTTPException(status_code=400, detail=str(e))
-```
+### Background worker not running
+`startup_event` in `main.py` calls `start_background_worker()`. It only runs when started via `uvicorn`, not during tests.
 
 ---
 
-## Deployment & Testing Checklist
+## Deployment Checklist
 
-### Before Deploying:
+- [ ] Backend `.env` has `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] `frontend/js/1_config.js` `API_BASE` points to the production backend URL
+- [ ] `EXTRA_CORS_ORIGINS` includes the production frontend URL (or it is in the hardcoded list in `main.py`)
+- [ ] Cloudflare Tunnel is running for the backend (or equivalent)
+- [ ] All new SQL migrations applied in Supabase SQL editor
+- [ ] Tested login → dashboard → logout flow
+- [ ] Tested all new API endpoints with a valid JWT (e.g. via Postman with `Authorization: Bearer <token>`)
 
-- [ ] **Backend:** All routes tested with Postman/curl
-  - Test authenticated endpoints with valid JWT token
-  - Test error cases (401, 404, 500)
-
-- [ ] **Frontend:** All pages accessible via hash routes
-  - Test `#/`, `#/login`, `#/dashboard`, etc.
-  - Test navigation between pages
-
-- [ ] **API Integration:** Frontend → Backend calls work
-  - Check DevTools Network tab for request/response
-  - Verify auth token in headers
-  - Test error handling (catch blocks)
-
-- [ ] **Auth Flow:** Login/logout/session persistence works
-  - Login redirects to dashboard
-  - Logout clears session
-  - Page reload maintains session
-
-- [ ] **Environment Variables:** All secrets configured
-  - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env`
-  - `API_BASE` in `frontend/js/api.js` matches backend URL
-
-- [ ] **CORS:** No blocked requests
-  - Frontend URL in `main.py` allow_origins
-
-- [ ] **Database Migrations:** Schema up to date
-  - Run any new SQL in `backend/sql/`
-  - Verify table structure matches queries
-
-- [ ] **Cloudflare Tunnel:** Running if prod deployment
-  - Backend tunnel URL stable
-  - Frontend configured to use tunnel URL
-
-### Deployment Steps:
-
-1. **Backend:**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   uvicorn main:app --reload
-   ```
-
-2. **Frontend:**
-   - Static files served from `frontend/` directory
-   - Configure web server to serve `index.html` for all routes (SPA mode)
-
-3. **Database:**
-   - Ensure Supabase project initialized with schema from `backend/sql/`
-
-4. **Testing:**
-   - Verify all endpoints respond correctly
-   - Test login/authentication flow
-   - Validate API responses match frontend expectations
-
----
-
-## File Reference Guide
-
-| File | Purpose |
-|------|---------|
-| `backend/main.py` | FastAPI app, router registration, CORS config |
-| `backend/routes/*.py` | API endpoint definitions |
-| `backend/services/*.py` | Business logic, reusable functions |
-| `backend/config/auth.py` | JWT token verification |
-| `backend/config/supabase.py` | Supabase client |
-| `frontend/index.html` | App shell, loads JS in order |
-| `frontend/js/1_config.js` | Global constants (must load first) |
-| `frontend/js/2_app.js` | App init, session setup |
-| `frontend/js/3_router.js` | Route definitions |
-| `frontend/js/api.js` | HTTP client with auto token injection |
-| `frontend/js/views/*.js` | Page components |
-| `frontend/js/components/*.js` | Reusable UI components |
-| `frontend/js/utils/auth.js` | Auth helper functions |
-| `frontend/css/` | Stylesheets |

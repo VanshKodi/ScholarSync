@@ -1,4 +1,4 @@
-import { request, clearCache } from "../../api.js";
+import { request } from "../../api.js";
 
 /* ======================
    Styles
@@ -261,9 +261,12 @@ export async function Notifications(container) {
   }
 
   refreshBtn.addEventListener("click", async () => {
-    clearCache("/notifications");
+    refreshBtn.textContent = "↻ Loading…";
+    refreshBtn.disabled = true;
     listEl.innerHTML = `<div class="notif-loading">Refreshing…</div>`;
     await load();
+    refreshBtn.textContent = "↻ Refresh";
+    refreshBtn.disabled = false;
   });
 
   markAll.addEventListener("click", async () => {
