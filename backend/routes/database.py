@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from config.supabase import supabase
 from config.auth import get_current_user
+from config.helpers import get_profile
 
 
 router = APIRouter()

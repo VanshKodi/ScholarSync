@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, B
 from config.supabase import supabase
 from config.auth import get_current_user
 from config.gemini import client as gemini_client
+from config.helpers import get_profile
 
 router = APIRouter()
 
@@ -14,13 +15,6 @@ HYDE_DELIMITER   = "_$_"        # separator Gemini uses between HyDE phrases
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get_profile(user_id: str) -> dict:
-    resp = supabase.table("profiles").select("*").eq("id", user_id).execute()
-    if not resp.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return resp.data[0]
-
-
 def _embed(text: str):
     resp = gemini_client.models.embed_content(model=EMBED_MODEL, content=text)
     return resp.embeddings[0].values
@@ -29,16 +23,7 @@ def _embed(text: str):
 def documents_visible_to_user(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("id")
 
-    # Get user profile
-    profile = supabase.table("profiles") \
-        .select("university_id") \
-        .eq("id", user_id) \
-        .execute()
-
-    if not profile.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    university_id = profile.data[0].get("university_id")
+    university_id = get_profile(user_id).get("university_id")
 
     # Single relational query: fetch visible groups with all their document versions
     groups_resp = supabase.table("document_groups") \
@@ -78,15 +63,7 @@ def documents_visible_to_user(current_user: dict = Depends(get_current_user)):
 def my_document_groups(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("id")
 
-    profile = supabase.table("profiles") \
-        .select("*") \
-        .eq("id", user_id) \
-        .execute()
-
-    if not profile.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    university_id = profile.data[0].get("university_id")
+    university_id = get_profile(user_id).get("university_id")
 
     groups = supabase.table("document_groups") \
          .select("doc_group_id, title, scope") \
@@ -108,16 +85,7 @@ async def create_document_group_and_upload(
 ):
     user_id = current_user.get("id")
 
-    # Get profile
-    profile = supabase.table("profiles") \
-        .select("*") \
-        .eq("id", user_id) \
-        .execute()
-
-    if not profile.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    university_id = profile.data[0].get("university_id")
+    university_id = get_profile(user_id).get("university_id")
 
     if scope not in {"local", "global"}:
         raise HTTPException(status_code=400, detail="Scope must be local or global")
@@ -233,7 +201,7 @@ def get_document_group(group_id: str, current_user: dict = Depends(get_current_u
     document versions (sorted by version_number descending).
     """
     user_id = current_user.get("id")
-    profile = _get_profile(user_id)
+    profile = get_profile(user_id)
     university_id = profile.get("university_id")
     role = profile.get("role")
 
@@ -293,7 +261,7 @@ async def update_document(
     Accepted body fields: human_description
     """
     user_id = current_user.get("id")
-    profile = _get_profile(user_id)
+    profile = get_profile(user_id)
     role = profile.get("role")
     university_id = profile.get("university_id")
 
@@ -344,7 +312,7 @@ def download_document(document_id: str, current_user: dict = Depends(get_current
       - Admin    : may download local documents from their university AND global docs.
     """
     user_id = current_user.get("id")
-    profile = _get_profile(user_id)
+    profile = get_profile(user_id)
     role = profile.get("role")
     university_id = profile.get("university_id")
 
@@ -524,7 +492,7 @@ async def search_documents(
     mode = (body.get("mode") or "semantic").strip().lower()
 
     user_id = current_user.get("id")
-    profile = _get_profile(user_id)
+    profile = get_profile(user_id)
     university_id = profile.get("university_id")
 
     # ── Text-only mode ────────────────────────────────────────────────────────
