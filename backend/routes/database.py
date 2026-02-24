@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from config.supabase import supabase
 from config.auth import get_current_user
 from config.helpers import get_profile
+from config.logger import get_logger
 
+log = get_logger("DATABASE")
 
 router = APIRouter()
 @router.post("/create-profile")
@@ -20,6 +22,7 @@ def create_profile(current_user: dict = Depends(get_current_user)):
     if not resp.data:
         raise HTTPException(status_code=400, detail="Failed to create profile")
 
+    log.info("Profile created for user_id=%s", user_id)
     return resp.data[0]
 
 @router.post("/create-university/{university_name}")
@@ -33,6 +36,7 @@ def create_university(university_name: str, current_user: dict = Depends(get_cur
 
     supabase.table("profiles").update({"role": "admin", "university_id": university_id}).eq("id", user_id).execute()
 
+    log.info("University '%s' created, user_id=%s is now admin", university_name, user_id)
     return {"message": "You are now admin"}
 
 @router.post("/apply-to-join-university/{university_id}")
@@ -47,36 +51,26 @@ def apply_to_join_university(university_id: str, current_user: dict = Depends(ge
     if not resp.data:
         raise HTTPException(status_code=400, detail="Failed to submit join request")
 
+    log.info("Join request submitted: user_id=%s → university_id=%s", user_id, university_id)
     return {"message": "Join request submitted successfully"}
     
 @router.get("/all-join-requests/{university_id}")
 def get_all_join_requests(university_id: str, current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("id")
 
-    profile_resp = supabase.table("profiles").select("*").eq("id", user_id).execute()
-    if not profile_resp.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    profile = profile_resp.data[0]
+    profile = get_profile(user_id)
     if profile["role"] != "admin" or profile["university_id"] != university_id:
         raise HTTPException(status_code=403, detail="Not authorized to view join requests")
 
     resp = supabase.table("university_join_requests").select("*").eq("university_id", university_id).execute()
+    log.debug("Fetched %d join requests for university_id=%s", len(resp.data or []), university_id)
     return resp.data or []
 
 @router.get("/get-user-profile")
 def get_user_profile(current_user: dict = Depends(get_current_user)):
     user_id = current_user.get("id")
-
-    resp = supabase.table("profiles") \
-        .select("*") \
-        .eq("id", user_id) \
-        .execute()
-
-    if not resp.data:
-        raise HTTPException(status_code=404, detail="Profile not found")
-
-    return resp.data[0]
+    log.debug("Fetching profile for user_id=%s", user_id)
+    return get_profile(user_id)
 
 @router.post("/handle-join-request")
 async def handle_join_request(
@@ -97,15 +91,7 @@ async def handle_join_request(
         admin_id = current_user.get("id")
 
         # 1️⃣ Verify admin
-        admin_profile = supabase.table("profiles") \
-            .select("*") \
-            .eq("id", admin_id) \
-            .execute()
-
-        if not admin_profile.data:
-            raise HTTPException(status_code=404, detail="Profile not found")
-
-        profile = admin_profile.data[0]
+        profile = get_profile(admin_id)
 
         if profile["role"] != "admin":
             raise HTTPException(status_code=403, detail="Only admin can handle requests")
@@ -151,8 +137,9 @@ async def handle_join_request(
                     "title":   "Application accepted",
                     "message": f"You have been accepted as a faculty member of {uni_name}.",
                 }).execute()
+                log.info("Acceptance notification sent to user_id=%s", join_request["requester_id"])
             except Exception as notif_exc:
-                print(f"WARNING – could not create acceptance notification: {notif_exc}")
+                log.warning("Could not create acceptance notification: %s", notif_exc)
 
         # 4️⃣ Delete request (both accept & reject)
         delete_resp = supabase.table("university_join_requests") \
@@ -163,10 +150,11 @@ async def handle_join_request(
         if not delete_resp.data:
             raise HTTPException(status_code=500, detail="Failed to delete request")
 
+        log.info("Join request %s %sed by admin_id=%s", request_id, action, admin_id)
         return {"message": f"Request {action}ed successfully"}
 
     except HTTPException:
         raise
     except Exception as e:
-        print("ERROR:", e)
+        log.error("Unhandled error in handle_join_request: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -1,4 +1,7 @@
 import { request, clearCache } from "../../api.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("Notifications");
 
 /* ======================
    Styles
@@ -207,6 +210,7 @@ export async function Notifications(container) {
       const notifs = await request("/notifications");
       renderList(notifs);
     } catch (e) {
+      log.error("Failed to load notifications", e);
       listEl.innerHTML = `<div class="notif-empty">Failed to load notifications.</div>`;
     }
   }
@@ -252,8 +256,7 @@ export async function Notifications(container) {
           dot.style.opacity = "0";
           try {
             await request(`/notifications/${n.notification_id}/read`, { method: "POST" });
-          } catch (_) { /* best-effort */ }
-        });
+          } catch (_) { /* best-effort */ }        });
       }
 
       listEl.appendChild(item);
@@ -274,7 +277,7 @@ export async function Notifications(container) {
         el.querySelector(".notif-dot").style.opacity = "0";
       });
     } catch (e) {
-      console.error("Failed to mark all as read", e);
+      log.error("Failed to mark all as read", e);
     }
   });
 

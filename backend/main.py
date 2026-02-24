@@ -7,10 +7,13 @@ from fastapi.middleware.cors import CORSMiddleware
 # To be used elsewhere
 from config.supabase import supabase
 from config.gemini import client
+from config.logger import get_logger
 from workers.processor import start_background_worker
 # uvicorn main:app --reload
 # cloudflared tunnel run scholarsync-backend
 import os
+
+log = get_logger("MAIN")
 
 app = FastAPI()
 
@@ -40,5 +43,5 @@ app.include_router(notifications_router)
 
 @app.on_event("startup")
 def startup_event():
-    print("[MAIN] Starting background document processor …")
+    log.info("Starting background document processor …")
     start_background_worker()

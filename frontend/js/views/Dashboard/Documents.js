@@ -1,4 +1,7 @@
 import { request, clearCache } from "../../api.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("Documents");
 
 /* ======================
    Documents UI
@@ -825,7 +828,7 @@ export function Documents(container) {
     try {
       userProfile = await request("/get-user-profile", { method: "GET" });
     } catch (err) {
-      console.warn("Could not load user profile", err);
+      log.warn("Could not load user profile", err);
     }
   }
 
@@ -845,7 +848,7 @@ export function Documents(container) {
 
       performSearch();
     } catch (err) {
-      console.error("loadDocuments error:", err);
+      log.error("loadDocuments error:", err);
       renderDocs([], globalColumn, "Global Documents");
       renderDocs([], localColumn, "Local University Documents");
     }
@@ -920,7 +923,7 @@ export function Documents(container) {
         window.open(resp.url, "_blank", "noopener");
       }
     } catch (err) {
-      console.error("Download failed", err);
+      log.error("Download failed", err);
       alert("Download failed: " + (err.message || "Unknown error"));
     }
   }
@@ -934,7 +937,7 @@ export function Documents(container) {
     try {
       data = await request(`/document-group/${groupId}`, { method: "GET" });
     } catch (err) {
-      console.error("Failed to load group", err);
+      log.error("Failed to load group", err);
       alert("Could not load document details.");
       return;
     }
@@ -1115,7 +1118,7 @@ export function Documents(container) {
           overlay.querySelector("#versionHumanDescDisplay").textContent = newDesc || "None";
           setTimeout(() => { statusMsg.textContent = ""; }, 2500);
         } catch (err) {
-          console.error("Save failed", err);
+          log.error("Save failed", err);
           statusMsg.textContent = "Save failed.";
           statusMsg.classList.add("error");
         }
@@ -1154,67 +1157,44 @@ export function Documents(container) {
   }
 
   /* ======================
-     HyDE Semantic Search
+     API Search (shared)
   ====================== */
 
-  async function performSemanticSearch() {
+  async function performApiSearch(mode, btn, errorMsg) {
     const query = searchInput.value.trim();
     if (!query) { performSearch(); return; }
 
-    const origText         = semanticSearchBtn.textContent;
-    semanticSearchBtn.textContent = "Searching…";
-    semanticSearchBtn.disabled    = true;
+    const origText   = btn.textContent;
+    btn.textContent  = "Searching…";
+    btn.disabled     = true;
 
     try {
       const results = await request("/search-documents", {
         method: "POST",
-        body:   { query, mode: "semantic" },
+        body:   { query, mode },
       });
 
       const data = Array.isArray(results) ? results : [];
       globalDocs = data.filter(d => d.scope === "global");
       localDocs  = data.filter(d => d.scope === "local");
+      log.info("%s search returned %d results", mode, data.length);
       performSearch();
     } catch (err) {
-      console.error("Semantic search failed", err);
-      alert("Semantic search failed. Falling back to local search.");
+      log.error("%s search failed", mode, err);
+      alert(errorMsg);
       performSearch();
     } finally {
-      semanticSearchBtn.textContent = origText;
-      semanticSearchBtn.disabled    = false;
+      btn.textContent = origText;
+      btn.disabled    = false;
     }
   }
 
-  /* ======================
-     Text Search
-  ====================== */
+  function performSemanticSearch() {
+    return performApiSearch("semantic", semanticSearchBtn, "Semantic search failed. Falling back to local search.");
+  }
 
-  async function performTextSearch() {
-    const query = searchInput.value.trim();
-    if (!query) { performSearch(); return; }
-
-    const origText       = textSearchBtn.textContent;
-    textSearchBtn.textContent = "Searching…";
-    textSearchBtn.disabled    = true;
-
-    try {
-      const results = await request("/search-documents", {
-        method: "POST",
-        body:   { query, mode: "text" },
-      });
-
-      const data = Array.isArray(results) ? results : [];
-      globalDocs = data.filter(d => d.scope === "global");
-      localDocs  = data.filter(d => d.scope === "local");
-      performSearch();
-    } catch (err) {
-      console.error("Text search failed", err);
-      alert("Text search failed.");
-      performSearch();
-    } finally {
-      textSearchBtn.textContent = origText;
-      textSearchBtn.disabled    = false;
-    }
+  function performTextSearch() {
+    return performApiSearch("text", textSearchBtn, "Text search failed.");
   }
 
   searchInput.addEventListener("input", performSearch);
@@ -1360,7 +1340,7 @@ export function Documents(container) {
       await loadDocuments();
 
     } catch (err) {
-      console.error("Document upload failed", err);
+      log.error("Document upload failed", err);
       setUploadState(false, "Upload failed. Check console for details.", true);
     }
   });
@@ -1381,7 +1361,7 @@ export function Documents(container) {
       }
     } catch (err) {
       // Silently ignore notification poll errors
-      console.debug("Notification poll failed:", err);
+      log.dev("Notification poll failed:", err);
     }
   }
 
@@ -1392,7 +1372,7 @@ export function Documents(container) {
     try {
       notifs = await request("/notifications", { method: "GET" }) || [];
     } catch (err) {
-      console.error("Failed to load notifications", err);
+      log.error("Failed to load notifications", err);
     }
 
     const overlay = document.createElement("div");
@@ -1465,7 +1445,7 @@ export function Documents(container) {
             localUnread = Math.max(0, localUnread - 1);
             updateBadge();
           } catch (err) {
-            console.error("Mark as read failed", err);
+            log.error("Mark as read failed", err);
           }
         });
       }
@@ -1495,7 +1475,7 @@ export function Documents(container) {
         localUnread = 0;
         updateBadge();
       } catch (err) {
-        console.error("Mark all read failed", err);
+        log.error("Mark all read failed", err);
       }
     });
   }

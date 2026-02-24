@@ -30,6 +30,9 @@ from docx import Document as DocxDocument
 # ── Internal ──────────────────────────────────────────────────────────────────
 from config.supabase import supabase
 from config.gemini import client as gemini_client
+from config.logger import get_logger
+
+log = get_logger("PROCESSOR")
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 POLL_INTERVAL = 30          # seconds between each poll cycle
@@ -53,24 +56,24 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
 # ──────────────────────────────────────────────────────────────────────────────
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    print("[PROCESSOR] Extracting text from PDF …")
+    log.info("Extracting text from PDF …")
     reader = pypdf.PdfReader(io.BytesIO(file_bytes))
     pages_text = []
     for i, page in enumerate(reader.pages):
         page_text = page.extract_text() or ""
         pages_text.append(page_text)
-        print(f"[PROCESSOR]   PDF page {i + 1}/{len(reader.pages)}: {len(page_text)} chars")
+        log.debug("PDF page %d/%d: %d chars", i + 1, len(reader.pages), len(page_text))
     full_text = "\n".join(pages_text)
-    print(f"[PROCESSOR] PDF extraction complete – {len(full_text)} total chars")
+    log.info("PDF extraction complete – %d total chars", len(full_text))
     return full_text
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:
-    print("[PROCESSOR] Extracting text from DOCX …")
+    log.info("Extracting text from DOCX …")
     doc = DocxDocument(io.BytesIO(file_bytes))
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     full_text = "\n".join(paragraphs)
-    print(f"[PROCESSOR] DOCX extraction complete – {len(paragraphs)} paragraphs, {len(full_text)} total chars")
+    log.info("DOCX extraction complete – %d paragraphs, %d total chars", len(paragraphs), len(full_text))
     return full_text
 
 
@@ -83,7 +86,7 @@ def extract_text(file_bytes: bytes, file_name: str, mime_type: str | None) -> st
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ):
         return extract_text_from_docx(file_bytes)
-    print(f"[PROCESSOR] Unsupported file type: name={file_name}, mime={mime_type} – skipping")
+    log.warning("Unsupported file type: name=%s, mime=%s – skipping", file_name, mime_type)
     return None
 
 
@@ -96,7 +99,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     Split text into overlapping character-level chunks.
     Tries to break at paragraph boundaries first.
     """
-    print(f"[PROCESSOR] Chunking text (chunk_size={chunk_size}, overlap={overlap}) …")
+    log.debug("Chunking text (chunk_size=%d, overlap=%d) …", chunk_size, overlap)
     paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
     chunks: List[str] = []
     current = ""
@@ -116,7 +119,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     if current:
         chunks.append(current)
 
-    print(f"[PROCESSOR] Chunking complete – {len(chunks)} chunks")
+    log.debug("Chunking complete – %d chunks", len(chunks))
     return chunks
 
 
@@ -125,7 +128,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 # ──────────────────────────────────────────────────────────────────────────────
 
 def generate_ai_description(human_description: str, text_excerpt: str) -> str:
-    print("[PROCESSOR] Calling Gemini to generate AI description …")
+    log.info("Calling Gemini to generate AI description …")
     prompt = (
         "You are an academic document assistant. "
         "Given the human-written description and an excerpt from the document, "
@@ -137,7 +140,7 @@ def generate_ai_description(human_description: str, text_excerpt: str) -> str:
     )
     response = gemini_client.models.generate_content(model=GEN_MODEL, contents=prompt)
     description = response.text.strip()
-    print(f"[PROCESSOR] AI description generated ({len(description)} chars)")
+    log.info("AI description generated (%d chars)", len(description))
     return description
 
 
@@ -165,9 +168,9 @@ def _create_notification(user_id: str, notif_type: str, title: str, message: str
         if group_id:
             payload["related_group_id"] = group_id
         supabase.table("notifications").insert(payload).execute()
-        print(f"[PROCESSOR] Notification created: type={notif_type} for user={user_id}")
+        log.info("Notification created: type=%s for user=%s", notif_type, user_id)
     except Exception as exc:
-        print(f"[PROCESSOR] WARNING – failed to create notification: {exc}")
+        log.warning("Failed to create notification: %s", exc)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -182,15 +185,15 @@ def process_document(doc: dict):
     mime_type   = doc.get("mime_type")
     human_desc  = doc.get("human_description") or ""
 
-    print(f"\n[PROCESSOR] ══════════════════════════════════════════")
-    print(f"[PROCESSOR] Processing document_id={document_id}")
-    print(f"[PROCESSOR] file_name={file_name}, mime_type={mime_type}")
-    print(f"[PROCESSOR] ══════════════════════════════════════════")
+    log.info("══════════════════════════════════════════")
+    log.info("Processing document_id=%s", document_id)
+    log.info("file_name=%s, mime_type=%s", file_name, mime_type)
+    log.info("══════════════════════════════════════════")
 
     # ── 1. Mark as processing and notify uploader ─────────────────────────────
     supabase.table("documents").update({"status": "processing"}) \
         .eq("document_id", document_id).execute()
-    print("[PROCESSOR] Status → processing")
+    log.info("Status → processing")
 
     # Resolve uploader user_id via the document_groups table
     uploader_id: str | None = None
@@ -214,12 +217,12 @@ def process_document(doc: dict):
         )
 
     # ── 2. Download file from Supabase Storage ────────────────────────────────
-    print(f"[PROCESSOR] Downloading file from storage: {file_path}")
+    log.info("Downloading file from storage: %s", file_path)
     try:
         file_bytes = supabase.storage.from_(STORAGE_BUCKET).download(file_path)
-        print(f"[PROCESSOR] Downloaded {len(file_bytes)} bytes")
+        log.info("Downloaded %d bytes", len(file_bytes))
     except Exception as exc:
-        print(f"[PROCESSOR] ERROR downloading file: {exc}")
+        log.error("Error downloading file: %s", exc)
         supabase.table("documents").update({"status": "uploaded"}) \
             .eq("document_id", document_id).execute()
         return
@@ -227,7 +230,7 @@ def process_document(doc: dict):
     # ── 3. Extract text ───────────────────────────────────────────────────────
     text = extract_text(file_bytes, file_name, mime_type)
     if not text or not text.strip():
-        print("[PROCESSOR] No text extracted – marking as ready without embeddings")
+        log.info("No text extracted – marking as ready without embeddings")
         supabase.table("documents").update({"status": "ready"}) \
             .eq("document_id", document_id).execute()
         if uploader_id:
@@ -240,7 +243,7 @@ def process_document(doc: dict):
         return
 
     # ── 4. Generate AI description ────────────────────────────────────────────
-    print("[PROCESSOR] Generating AI description …")
+    log.info("Generating AI description …")
     try:
         ai_description = generate_ai_description(human_desc, text)
         supabase.table("documents").update({"ai_description": ai_description}) \
@@ -249,23 +252,23 @@ def process_document(doc: dict):
         if group_id:
             supabase.table("document_groups").update({"ai_description": ai_description}) \
                 .eq("doc_group_id", group_id).execute()
-        print("[PROCESSOR] AI description saved to database")
+        log.info("AI description saved to database")
     except Exception as exc:
-        print(f"[PROCESSOR] WARNING – AI description generation failed: {exc}")
+        log.warning("AI description generation failed: %s", exc)
         ai_description = human_desc  # fall back to human description
 
     # ── 5. Chunk text ─────────────────────────────────────────────────────────
     chunks = chunk_text(text)
     if not chunks:
-        print("[PROCESSOR] No chunks produced – skipping embedding")
+        log.info("No chunks produced – skipping embedding")
         supabase.table("documents").update({"status": "ready"}) \
             .eq("document_id", document_id).execute()
         return
 
     # ── 6. Embed and store each chunk ─────────────────────────────────────────
-    print(f"[PROCESSOR] Embedding {len(chunks)} chunks …")
+    log.info("Embedding %d chunks …", len(chunks))
     for idx, chunk_text_content in enumerate(chunks):
-        print(f"[PROCESSOR]   Embedding chunk {idx + 1}/{len(chunks)} ({len(chunk_text_content)} chars)")
+        log.debug("Embedding chunk %d/%d (%d chars)", idx + 1, len(chunks), len(chunk_text_content))
         try:
             # Insert chunk record
             chunk_resp = supabase.table("document_chunks").insert({
@@ -275,14 +278,14 @@ def process_document(doc: dict):
             }).execute()
 
             if not chunk_resp.data:
-                print(f"[PROCESSOR]   WARNING – chunk insert returned no data for index {idx}")
+                log.warning("Chunk insert returned no data for index %d", idx)
                 continue
 
             chunk_id = chunk_resp.data[0]["chunk_id"]
 
             # Generate embedding
             vector = embed_text(chunk_text_content)
-            print(f"[PROCESSOR]   Embedding vector length: {len(vector)}")
+            log.debug("Embedding vector length: %d", len(vector))
 
             # Store embedding
             supabase.table("embeddings").insert({
@@ -292,10 +295,10 @@ def process_document(doc: dict):
                 "model_name":  EMBED_MODEL,
                 "vector":      vector,
             }).execute()
-            print(f"[PROCESSOR]   Chunk {idx + 1} embedded and stored ✓")
+            log.debug("Chunk %d embedded and stored", idx + 1)
 
         except Exception as exc:
-            print(f"[PROCESSOR]   ERROR on chunk {idx + 1}: {exc}")
+            log.error("Error on chunk %d: %s", idx + 1, exc)
             traceback.print_exc()
 
     # ── 7. Mark as ready ──────────────────────────────────────────────────────
@@ -303,7 +306,7 @@ def process_document(doc: dict):
         "status":      "ready",
         "is_embedded": True,
     }).eq("document_id", document_id).execute()
-    print(f"[PROCESSOR] document_id={document_id} → status=ready, is_embedded=True")
+    log.info("document_id=%s → status=ready, is_embedded=True", document_id)
 
     # ── 8. Notify uploader ────────────────────────────────────────────────────
     if uploader_id:
@@ -316,7 +319,7 @@ def process_document(doc: dict):
             group_id=group_id,
         )
 
-    print(f"[PROCESSOR] ✓ Processing complete for document_id={document_id}\n")
+    log.info("Processing complete for document_id=%s", document_id)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -325,7 +328,7 @@ def process_document(doc: dict):
 
 def _poll_once():
     """Look for one unprocessed document and process it."""
-    print("[PROCESSOR] Polling for unprocessed documents …")
+    log.debug("Polling for unprocessed documents …")
     try:
         resp = supabase.table("documents") \
             .select("*") \
@@ -335,24 +338,24 @@ def _poll_once():
             .execute()
 
         if not resp.data:
-            print("[PROCESSOR] No pending documents found.")
+            log.debug("No pending documents found.")
             return
 
         doc = resp.data[0]
         process_document(doc)
 
     except Exception as exc:
-        print(f"[PROCESSOR] ERROR during poll: {exc}")
+        log.error("Error during poll: %s", exc)
         traceback.print_exc()
 
 
 def _run_loop():
-    print(f"[PROCESSOR] Background worker started (polling every {POLL_INTERVAL}s)")
+    log.info("Background worker started (polling every %ds)", POLL_INTERVAL)
     while True:
         try:
             _poll_once()
         except Exception as exc:
-            print(f"[PROCESSOR] Unhandled error in poll loop: {exc}")
+            log.error("Unhandled error in poll loop: %s", exc)
             traceback.print_exc()
         time.sleep(POLL_INTERVAL)
 
@@ -361,5 +364,5 @@ def start_background_worker():
     """Start the processor as a daemon thread so it dies with the main process."""
     t = threading.Thread(target=_run_loop, name="doc-processor", daemon=True)
     t.start()
-    print("[PROCESSOR] Daemon thread launched.")
+    log.info("Daemon thread launched.")
     return t

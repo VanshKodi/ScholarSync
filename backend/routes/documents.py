@@ -3,6 +3,9 @@ from config.supabase import supabase
 from config.auth import get_current_user
 from config.gemini import client as gemini_client
 from config.helpers import get_profile
+from config.logger import get_logger
+
+log = get_logger("DOCUMENTS")
 
 router = APIRouter()
 
@@ -415,7 +418,7 @@ def _text_search(query: str, user_id: str, university_id: str | None) -> list:
     Text-based search: ILIKE on document_chunks.text_content and
     document_groups.title / documents.human_description.
     """
-    print(f"[SEARCH] Text search – query='{query}'")
+    log.debug("Text search – query='%s'", query)
     seen: set = set()
     results: list = []
 
@@ -444,7 +447,7 @@ def _text_search(query: str, user_id: str, university_id: str | None) -> list:
                 if r:
                     results.append(r)
     except Exception as exc:
-        print(f"[SEARCH] Chunk text search error: {exc}")
+        log.error("Chunk text search error: %s", exc)
 
     # 2) Search in document_groups.title
     try:
@@ -462,9 +465,9 @@ def _text_search(query: str, user_id: str, university_id: str | None) -> list:
             if r:
                 results.append(r)
     except Exception as exc:
-        print(f"[SEARCH] Title text search error: {exc}")
+        log.error("Title text search error: %s", exc)
 
-    print(f"[SEARCH] Text search returning {len(results)} results")
+    log.debug("Text search returning %d results", len(results))
     return results
 
 
@@ -500,7 +503,7 @@ async def search_documents(
         return _text_search(query, user_id, university_id)
 
     # ── Semantic (HyDE) mode with automatic text fallback ─────────────────────
-    print(f"[SEARCH] HyDE search initiated – query='{query}'")
+    log.info("HyDE search initiated – query='%s'", query)
 
     # Step 1: Gemini → hypothetical phrases
     hyde_prompt = (
@@ -515,10 +518,10 @@ async def search_documents(
             model=GEN_MODEL, contents=hyde_prompt
         )
         raw_phrases = hyde_resp.text.strip()
-        print(f"[SEARCH] Gemini HyDE phrases: {raw_phrases}")
+        log.debug("Gemini HyDE phrases: %s", raw_phrases)
         phrases = [p.strip() for p in raw_phrases.split(HYDE_DELIMITER) if p.strip()]
     except Exception as exc:
-        print(f"[SEARCH] Gemini HyDE generation failed: {exc} – falling back to query")
+        log.warning("Gemini HyDE generation failed: %s – falling back to query", exc)
         phrases = [query]
 
     if not phrases:
@@ -530,11 +533,11 @@ async def search_documents(
     embedding_failures = 0
 
     for phrase in phrases:
-        print(f"[SEARCH] Embedding phrase: '{phrase[:80]}'")
+        log.debug("Embedding phrase: '%s'", phrase[:80])
         try:
             vector = _embed(phrase)
         except Exception as exc:
-            print(f"[SEARCH] Embedding failed for phrase: {exc}")
+            log.warning("Embedding failed for phrase: %s", exc)
             embedding_failures += 1
             continue
 
@@ -563,12 +566,12 @@ async def search_documents(
                     results.append(r)
 
         except Exception as exc:
-            print(f"[SEARCH] Vector search failed: {exc}")
+            log.error("Vector search failed: %s", exc)
 
     # Automatic text fallback when all embeddings failed or no results found
     if not results:
-        print("[SEARCH] Semantic search yielded no results – falling back to text search")
+        log.info("Semantic search yielded no results – falling back to text search")
         results = _text_search(query, user_id, university_id)
 
-    print(f"[SEARCH] Returning {len(results)} results")
+    log.info("Returning %d results", len(results))
     return results

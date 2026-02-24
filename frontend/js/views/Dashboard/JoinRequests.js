@@ -122,6 +122,9 @@ if (!document.getElementById("joinrequests-styles")) {
 }
 
 import { request, clearCache } from "../../api.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("JoinRequests");
 
 export function JoinRequests(container) {
   const wrapper = document.createElement("div");
@@ -218,9 +221,10 @@ export function JoinRequests(container) {
                 action
               }
             });
-
+            log.info("Join request %s %sed", req.request_id, action);
             loadAndRender();
           } catch (error) {
+            log.error("Failed to %s join request", action, error);
             showError(error.detail || "Action failed");
             approveBtn.disabled = false;
             rejectBtn.disabled = false;
@@ -237,6 +241,7 @@ export function JoinRequests(container) {
 
       card.appendChild(list);
     } catch (error) {
+      log.error("Failed to load join requests", error);
       showError(error.detail || "Failed to load requests");
     }
   }

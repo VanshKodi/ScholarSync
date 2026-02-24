@@ -1,4 +1,7 @@
 import { supabase } from "./utils/supabase.js";
+import { createLogger } from "./utils/logger.js";
+
+const log = createLogger("API");
 
 const API_BASE = window.__ENV__?.API_BASE || "https://api.vanshkodi.in";
 
@@ -80,7 +83,11 @@ async function request(path, options = {}) {
   }
 
   const res = await fetch(API_BASE + path, opts);
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const errText = await res.text();
+    log.error("Request failed [%s %s] %d: %s", method, path, res.status, errText);
+    throw new Error(errText);
+  }
   const data = await res.json().catch(() => ({}));
 
   // Cache GET responses

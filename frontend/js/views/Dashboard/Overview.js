@@ -1,5 +1,8 @@
 import { supabase } from "../../utils/supabase.js";
 import { Session, request, clearCache } from "../../api.js";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("Overview");
 
 /* ======================
    Styles
@@ -214,7 +217,9 @@ function attachHandlers(container, user) {
     try {
       await request("/create-profile", { method: "POST" });
       showMessage("Profile created successfully!");
+      log.info("Profile created");
     } catch (e) {
+      log.error("Failed to create profile", e);
       showMessage(e.detail || "Failed to create profile", "error");
     }
   };
@@ -235,8 +240,10 @@ function attachHandlers(container, user) {
         await request(`/create-university/${encodeURIComponent(name)}`, {
           method: "POST",
         });
+        log.info("University created: %s", name);
         showMessage("University created. You are now admin.");
       } catch (e) {
+        log.error("Failed to create university", e);
         showMessage(e.detail || "Failed to create university", "error");
       }
     };
@@ -258,8 +265,10 @@ function attachHandlers(container, user) {
         await request(`/apply-to-join-university/${encodeURIComponent(id)}`, {
           method: "POST",
         });
+        log.info("Join request submitted for university_id=%s", id);
         showMessage("Join request submitted successfully!");
       } catch (e) {
+        log.error("Failed to submit join request", e);
         showMessage(e.detail || "Failed to submit join request", "error");
       }
     };
