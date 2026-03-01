@@ -1,29 +1,84 @@
-# =========================
-# Environment Variables (CRITICAL)
-# =========================
-# Never commit your secret keys to version control!
-.env
-.env.*
-!.env.example
+# Python Virtual Environments
+venv/
+.venv/
+env/
+.env/  # Note: This is already in your file for secrets, but also covers some venv naming
+ENV/
+python_env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-Frontend/node_modules/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Production build output
-Frontend/dist/
-Frontend/dist-ssr/
+# C extensions
+*.so
+
+# PyInstaller
+#  Usually these files are written by a python script to a directory where the relevant
+#  python files are located.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
 # Logs
+logs
+*.log
 npm-debug.log*
-# Virtual Environments (where Python installs its packages)
-venv/
-env/
-.venv/
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Compiled Python files and cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
+.env 
 
-.vscode/
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
