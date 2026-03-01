@@ -1,0 +1,25 @@
+.env
+.env.*
+!.env.example
+# Dependencies
+Frontend/node_modules/
+
+# Production build output
+Frontend/dist/
+Frontend/dist-ssr/
+# Logs
+npm-debug.log*
+# Virtual Environments (where Python installs its packages)
+venv/
+env/
+.venv/
+
+# Compiled Python files and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+
+.vscode/
