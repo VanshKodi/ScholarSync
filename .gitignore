@@ -1,25 +1,39 @@
-.env
-.env.*
-!.env.example
-# Dependencies
-Frontend/node_modules/
-
-# Production build output
-Frontend/dist/
-Frontend/dist-ssr/
 # Logs
+logs
+*.log
 npm-debug.log*
-# Virtual Environments (where Python installs its packages)
-venv/
-env/
-.venv/
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Compiled Python files and cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
+node_modules
+.DS_Store
+dist
+dist-ssr
+coverage
+*.local
 
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-.vscode/
+*.tsbuildinfo
+
+.eslintcache
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
